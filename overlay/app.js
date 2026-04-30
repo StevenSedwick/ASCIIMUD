@@ -59,6 +59,22 @@ function handle(evt) {
     case "death":
       pushFeed(`*** ${evt.player} has died ***`, "death");
       break;
+    case "combat": {
+      // Single combat event (currently only UNIT_DIED is broadcast unbucketed).
+      if (evt.event === "UNIT_DIED") {
+        pushFeed(`☠ ${evt.dst || "?"} dies.`, "death");
+      }
+      break;
+    }
+    case "combat_summary": {
+      const arrow = evt.direction === "out" ? "→" : evt.direction === "in" ? "←" : "·";
+      const who = evt.direction === "out" ? evt.dst : evt.src;
+      const cls = evt.direction === "in" ? "in" : "out";
+      const hits = evt.count > 1 ? ` x${evt.count}` : "";
+      const total = evt.total ? ` (${evt.total})` : "";
+      pushFeed(`${arrow} ${evt.spell || evt.event}${hits}${total} ${who || ""}`.trim(), cls);
+      break;
+    }
     default:
       break;
   }

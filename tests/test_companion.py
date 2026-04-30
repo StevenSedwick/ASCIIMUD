@@ -36,7 +36,7 @@ import companion  # noqa: E402
 # Helpers
 # ---------------------------------------------------------------------------
 
-PREFIX = "ASCIIMUD|"
+PREFIX = "ASCIIMUD~"
 
 def make_snapshot(hp=320, hpMax=360, mp=180, mpMax=200, level=12,
                   zone_name="Elwynn Forest", sev=0, combat=False,

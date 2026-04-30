@@ -1,8 +1,11 @@
 """ASCIIMUD companion process.
 
-Tails ``WoWChatLog.txt``, parses ``ASCIIMUD|{json}`` lines emitted by the addon,
-maintains an authoritative state store, and broadcasts events + snapshots over a
-WebSocket on ``ws://<host>:<port>/ws`` for the OBS overlay (and, later, the EBS).
+Tails the WoW logs the game engine writes to disk:
+  * ``WoWCombatLog.txt`` — every combat event involving the player
+  * ``WoWChatLog.txt``   — chat events (zone notices, system messages, etc.)
+
+Maintains an authoritative state store and broadcasts events + snapshots over
+a WebSocket on ``ws://<host>:<port>/ws`` for the OBS overlay (and the EBS).
 
 Usage:
     pip install -r requirements.txt
@@ -16,11 +19,14 @@ import asyncio
 import json
 import logging
 import sys
+import time
 import tomllib
 from pathlib import Path
 from typing import Any
 
 from aiohttp import WSMsgType, web
+
+from combatlog import parse as parse_combat
 
 try:
     import websockets  # type: ignore
@@ -28,13 +34,16 @@ except ImportError:  # pragma: no cover - optional EBS forwarding
     websockets = None  # type: ignore
 
 LOG = logging.getLogger("asciimud.companion")
-PREFIX = "ASCIIMUD|"
+PREFIX = "ASCIIMUD~"
+COALESCE_WINDOW = 1.5  # seconds to bucket melee/spell repeats
 
 
 class StateStore:
     def __init__(self) -> None:
         self.snapshot: dict[str, Any] = {}
         self.severity: int = 0
+        self.player_name: str | None = None
+        self.last_target: str | None = None
 
     def apply(self, evt: dict[str, Any]) -> None:
         t = evt.get("t")
@@ -42,6 +51,69 @@ class StateStore:
             self.snapshot = evt.get("data", {})
         elif t == "severity":
             self.severity = int(evt.get("level", 0))
+        elif t == "combat":
+            # Track who you're hitting / who's hitting you.
+            if evt.get("src") and evt.get("src") == self.player_name:
+                if evt.get("dst"):
+                    self.last_target = evt["dst"]
+
+
+class Coalescer:
+    """Bucket repeated combat hits within COALESCE_WINDOW into summary events."""
+
+    def __init__(self, hub: "Hub", player_name_getter) -> None:
+        self.hub = hub
+        self.get_player = player_name_getter
+        # key = (event, spell, src->dst) -> {count, total, last_ts}
+        self.buckets: dict[tuple, dict[str, Any]] = {}
+        self._task: asyncio.Task | None = None
+
+    def start(self) -> None:
+        self._task = asyncio.create_task(self._flusher())
+
+    async def _flusher(self) -> None:
+        while True:
+            await asyncio.sleep(0.5)
+            now = time.monotonic()
+            ready = [k for k, b in self.buckets.items() if now - b["last"] > COALESCE_WINDOW]
+            for k in ready:
+                b = self.buckets.pop(k)
+                event, spell, direction = k
+                payload = {
+                    "t": "combat_summary",
+                    "event": event,
+                    "spell": spell,
+                    "direction": direction,
+                    "count": b["count"],
+                    "total": b["total"],
+                    "src": b["src"],
+                    "dst": b["dst"],
+                }
+                await self.hub.broadcast(payload)
+
+    def add(self, evt: dict[str, Any]) -> None:
+        event = evt["event"]
+        if event == "UNIT_DIED":
+            # No bucketing — broadcast immediately.
+            asyncio.create_task(self.hub.broadcast(evt))
+            return
+        spell = evt.get("spell", "")
+        player = self.get_player()
+        src, dst = evt.get("src"), evt.get("dst")
+        if player and src == player:
+            direction = "out"
+        elif player and dst == player:
+            direction = "in"
+        else:
+            direction = "other"
+        key = (event, spell, direction)
+        b = self.buckets.get(key)
+        if b is None:
+            b = {"count": 0, "total": 0, "last": 0.0, "src": src, "dst": dst}
+            self.buckets[key] = b
+        b["count"] += 1
+        b["total"] += int(evt.get("amount", 0) or 0)
+        b["last"] = time.monotonic()
 
 
 class Hub:
@@ -135,6 +207,17 @@ async def ingest(line: str, store: StateStore, hub: Hub,
         await ebs.submit(raw)
 
 
+async def ingest_combat(line: str, store: StateStore,
+                        coalescer: Coalescer, ebs: EBSForwarder | None) -> None:
+    evt = parse_combat(line)
+    if evt is None:
+        return
+    store.apply(evt)
+    coalescer.add(evt)
+    if ebs is not None:
+        await ebs.submit(json.dumps(evt))
+
+
 async def ws_handler(request: web.Request) -> web.WebSocketResponse:
     ws = web.WebSocketResponse(heartbeat=30)
     await ws.prepare(request)
@@ -174,11 +257,16 @@ async def main() -> None:
     )
     cfg = load_config()
     log_path = Path(cfg["wow"]["log_path"]).expanduser()
+    combat_log_path = Path(
+        cfg["wow"].get("combat_log_path", str(log_path.parent / "WoWCombatLog.txt"))
+    ).expanduser()
     host = cfg["server"].get("host", "127.0.0.1")
     port = int(cfg["server"].get("port", 8765))
 
     store = StateStore()
     hub = Hub()
+    coalescer = Coalescer(hub, lambda: store.player_name)
+    coalescer.start()
 
     ebs: EBSForwarder | None = None
     ecfg = cfg.get("ebs", {})
@@ -201,8 +289,13 @@ async def main() -> None:
     site = web.TCPSite(runner, host, port)
     await site.start()
     LOG.info("WebSocket server on ws://%s:%d/ws", host, port)
+    LOG.info("Tailing chat log:   %s", log_path)
+    LOG.info("Tailing combat log: %s", combat_log_path)
 
-    await tail(log_path, lambda l: ingest(l, store, hub, ebs))
+    await asyncio.gather(
+        tail(log_path, lambda l: ingest(l, store, hub, ebs)),
+        tail(combat_log_path, lambda l: ingest_combat(l, store, coalescer, ebs)),
+    )
 
 
 if __name__ == "__main__":

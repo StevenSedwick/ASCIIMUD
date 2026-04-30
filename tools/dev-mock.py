@@ -29,7 +29,7 @@ import tempfile
 import time
 from pathlib import Path
 
-PREFIX = "ASCIIMUD|"
+PREFIX = "ASCIIMUD~"
 PLAYER = {"name": "Testwick", "class": "WARLOCK", "level": 12,
           "hp": 320, "hpMax": 360, "mp": 180, "mpMax": 200}
 ZONE   = {"name": "Elwynn Forest", "subzone": "Goldshire", "x": 0, "y": 0}
