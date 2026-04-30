@@ -15,14 +15,14 @@ local Exporter = {}
 ns.Exporter = Exporter
 
 local function enableLogs()
-    if not LoggingCombat() then
-        LoggingCombat(true)
-        print("|cff66ccffASCIIMUD|r: combat log enabled (Logs/WoWCombatLog.txt).")
-    end
-    if not LoggingChat() then
-        LoggingChat(true)
-        print("|cff66ccffASCIIMUD|r: chat log enabled (Logs/WoWChatLog.txt).")
-    end
+    -- Always force-set; the no-arg getter is unreliable on Classic Era.
+    local okC, errC = pcall(LoggingCombat, true)
+    local okT, errT = pcall(LoggingChat, true)
+    print(string.format(
+        "|cff66ccffASCIIMUD|r: LoggingCombat(true)=%s LoggingChat(true)=%s",
+        okC and "ok" or ("ERR:" .. tostring(errC)),
+        okT and "ok" or ("ERR:" .. tostring(errT))
+    ))
 end
 
 function Exporter:Init()

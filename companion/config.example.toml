@@ -3,6 +3,9 @@
 # Classic Era default:
 #   C:\Program Files (x86)\World of Warcraft\_classic_era_\Logs\WoWChatLog.txt
 log_path = "C:/Program Files (x86)/World of Warcraft/_classic_era_/Logs/WoWChatLog.txt"
+# Combat log written by /combatlog (the addon enables this automatically).
+# Defaults to log_path's directory + WoWCombatLog.txt if omitted.
+combat_log_path = "C:/Program Files (x86)/World of Warcraft/_classic_era_/Logs/WoWCombatLog.txt"
 
 [server]
 host = "127.0.0.1"

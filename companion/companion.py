@@ -190,6 +190,53 @@ async def tail(path: Path, on_line) -> None:
             await on_line(line.rstrip("\r\n"))
 
 
+async def tail_glob(directory: Path, pattern: str, on_line, label: str = "") -> None:
+    """Tail the newest file matching ``pattern`` in ``directory``.
+
+    Auto-switches to a newer matching file when one appears (e.g. when WoW
+    starts a new session and creates ``WoWCombatLog-MMDDYY_HHMMSS.txt``).
+    """
+    LOG.info("Tail-glob %s/%s (%s)", directory, pattern, label or "newest")
+
+    def newest() -> Path | None:
+        if not directory.exists():
+            return None
+        files = sorted(directory.glob(pattern), key=lambda p: p.stat().st_mtime)
+        return files[-1] if files else None
+
+    current: Path | None = None
+    f = None
+    try:
+        while True:
+            latest = newest()
+            if latest is None:
+                if current is not None:
+                    LOG.warning("No %s files in %s; waiting…", pattern, directory)
+                    if f is not None:
+                        f.close()
+                        f = None
+                    current = None
+                await asyncio.sleep(2)
+                continue
+            if latest != current:
+                if f is not None:
+                    f.close()
+                LOG.info("Tailing %s", latest)
+                f = latest.open("r", encoding="utf-8", errors="replace")
+                f.seek(0, 2)
+                current = latest
+            assert f is not None
+            line = f.readline()
+            if not line:
+                # Periodically re-scan in case a new file appeared.
+                await asyncio.sleep(0.25)
+                continue
+            await on_line(line.rstrip("\r\n"))
+    finally:
+        if f is not None:
+            f.close()
+
+
 async def ingest(line: str, store: StateStore, hub: Hub,
                  ebs: EBSForwarder | None) -> None:
     idx = line.find(PREFIX)
@@ -257,9 +304,9 @@ async def main() -> None:
     )
     cfg = load_config()
     log_path = Path(cfg["wow"]["log_path"]).expanduser()
-    combat_log_path = Path(
-        cfg["wow"].get("combat_log_path", str(log_path.parent / "WoWCombatLog.txt"))
-    ).expanduser()
+    log_dir = Path(cfg["wow"].get("log_dir", str(log_path.parent))).expanduser()
+    combat_log_pattern = cfg["wow"].get("combat_log_pattern", "WoWCombatLog*.txt")
+    chat_log_pattern = cfg["wow"].get("chat_log_pattern", "WoWChatLog*.txt")
     host = cfg["server"].get("host", "127.0.0.1")
     port = int(cfg["server"].get("port", 8765))
 
@@ -289,12 +336,13 @@ async def main() -> None:
     site = web.TCPSite(runner, host, port)
     await site.start()
     LOG.info("WebSocket server on ws://%s:%d/ws", host, port)
-    LOG.info("Tailing chat log:   %s", log_path)
-    LOG.info("Tailing combat log: %s", combat_log_path)
+    LOG.info("Watching %s for %s and %s", log_dir, chat_log_pattern, combat_log_pattern)
 
     await asyncio.gather(
-        tail(log_path, lambda l: ingest(l, store, hub, ebs)),
-        tail(combat_log_path, lambda l: ingest_combat(l, store, coalescer, ebs)),
+        tail_glob(log_dir, chat_log_pattern,
+                  lambda l: ingest(l, store, hub, ebs), label="chat"),
+        tail_glob(log_dir, combat_log_pattern,
+                  lambda l: ingest_combat(l, store, coalescer, ebs), label="combat"),
     )
 
 
