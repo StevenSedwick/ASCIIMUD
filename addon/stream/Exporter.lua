@@ -27,7 +27,6 @@ local function hideChannelFromAllFrames()
         local frame = _G["ChatFrame" .. i]
         if frame then
             ChatFrame_RemoveChannel(frame, CHANNEL_NAME)
-            ChatFrame_ExcludeChannel(frame, CHANNEL_NAME)
         end
     end
 end
