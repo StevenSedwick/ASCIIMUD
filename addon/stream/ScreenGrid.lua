@@ -18,7 +18,8 @@
 --   cells 24..30  bits   = MP%/100 * 100 (0..100, 7 bits)
 --   cell  31      bit    = target hostile
 --   cells 32..47  byte4..5 zone id hash (16 bits)
---   cells 48..55  byte6  reserved
+--   cells 48..54  bits   = target HP%/100 * 100 (0..100, 7 bits)
+--   cell  55      bit    = has target (1 = target exists)
 --   cells 56..63  byte7  = checksum (sum of bytes 0..6 mod 256)
 
 local _, ns = ...
@@ -26,11 +27,11 @@ local ScreenGrid = {}
 ns.ScreenGrid = ScreenGrid
 
 -- Tunable.
-local TICK_SECS    = 2.0   -- how often to snap
-local CELL_PX      = 8     -- size of each cell on screen, must be >= 4 to decode reliably
-local GRID_CELLS   = 8     -- 8x8 = 64 bits = 8 bytes per shot
-local CORNER_OFF_X = 4     -- pixels from screen edge
-local CORNER_OFF_Y = 4
+local TICK_SECS    = 2.0    -- how often to snap
+local CELL_PX      = 12     -- size of each cell on screen, must be >= 4 to decode reliably
+local GRID_CELLS   = 8      -- 8x8 = 64 bits = 8 bytes per shot
+local CORNER_OFF_X = 8      -- pixels from screen edge
+local CORNER_OFF_Y = 8
 
 local SIZE_PX = CELL_PX * GRID_CELLS
 
@@ -82,6 +83,8 @@ end
 local function build()
     if frame then return end
     frame = CreateFrame("Frame", "ASCIIMUDGrid", UIParent)
+    -- Force 1:1 logical-units-to-pixels so the decoder knows exact coords.
+    frame:SetScale(1 / UIParent:GetEffectiveScale())
     frame:SetSize(SIZE_PX, SIZE_PX)
     frame:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -CORNER_OFF_X, CORNER_OFF_Y)
     frame:SetFrameStrata("TOOLTIP")
@@ -108,7 +111,17 @@ local function encodeSnapshot()
     local hpPct = 0
     local mpPct = 0
     local inCombat = UnitAffectingCombat("player") and 1 or 0
-    local targetHostile = (UnitExists("target") and UnitCanAttack("player", "target")) and 1 or 0
+    local hasTarget = UnitExists("target") and 1 or 0
+    local targetHostile = (hasTarget == 1 and UnitCanAttack("player", "target")) and 1 or 0
+    local targetHpPct = 0
+    if hasTarget == 1 then
+        local thMax = UnitHealthMax("target") or 0
+        if thMax > 0 then
+            targetHpPct = math.floor((UnitHealth("target") / thMax) * 100)
+        end
+        if targetHpPct > 100 then targetHpPct = 100 end
+        if targetHpPct < 0 then targetHpPct = 0 end
+    end
 
     local hpMax = UnitHealthMax("player") or 0
     if hpMax > 0 then
@@ -124,6 +137,9 @@ local function encodeSnapshot()
     local zoneName = GetZoneText() or ""
     local zoneHash = fnv1a8(zoneName)
 
+    -- byte 6: bits 0..6 = targetHpPct, bit 7 = hasTarget (LSB)
+    local byte6 = targetHpPct * 2 + hasTarget
+
     setByte(0, 0xA5)          -- magic marker
     setByte(1, tickCounter)
     setBits(16, 7, hpPct)     -- cells 16..22
@@ -132,14 +148,14 @@ local function encodeSnapshot()
     setCellBit(31, targetHostile)  -- cell 31
     setByte(4, math.floor(zoneHash / 256))  -- high byte
     setByte(5, zoneHash % 256)              -- low byte
-    setByte(6, 0)                           -- reserved
+    setByte(6, byte6)                       -- target HP + hasTarget
     -- checksum: sum of bytes 0..6 mod 256
     local sum = 0xA5 + tickCounter
                 + math.floor(hpPct * 2 + inCombat)        -- byte2 reconstructed
                 + math.floor(mpPct * 2 + targetHostile)   -- byte3 reconstructed
                 + math.floor(zoneHash / 256)
                 + (zoneHash % 256)
-                + 0
+                + byte6
     setByte(7, sum % 256)
 end
 
@@ -160,6 +176,12 @@ function ScreenGrid:Init()
     -- screenshotQuality 0..10 ; format "jpg" or "tga".
     pcall(SetCVar, "screenshotFormat", "jpg")
     pcall(SetCVar, "screenshotQuality", "1")
+    -- Suppress yellow "Screenshot captured" toast that would otherwise spam
+    -- every 2 seconds. The default UI listens for these on UIErrorsFrame.
+    if UIErrorsFrame and UIErrorsFrame.UnregisterEvent then
+        pcall(UIErrorsFrame.UnregisterEvent, UIErrorsFrame, "SCREENSHOT_SUCCEEDED")
+        pcall(UIErrorsFrame.UnregisterEvent, UIErrorsFrame, "SCREENSHOT_FAILED")
+    end
     if ticker then ticker:Cancel() end
     ticker = C_Timer.NewTicker(TICK_SECS, tick)
     print(string.format(

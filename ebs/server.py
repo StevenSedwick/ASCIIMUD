@@ -74,16 +74,20 @@ class ChannelState:
         p = s.get("player", {}) or {}
         z = s.get("zone", {}) or {}
         tgt = s.get("target") or None
-        hp_pct = round(100 * (p.get("hp", 0) / p["hpMax"])) if p.get("hpMax") else 0
         return {
-            "v": 1,
+            "v": 2,
             "ts": int(self.last_event_ts),
             "sev": self.severity,
             "ch": s.get("chapter", 1),
-            "z": z.get("subzone") or z.get("name") or "",
+            "z": z.get("subzone") or z.get("name") or (
+                f"zone#{z['hash']:04X}" if z.get("hash") is not None else ""
+            ),
             "lvl": p.get("level"),
-            "hpPct": hp_pct,
+            "hpPct": p.get("hpPct", 0),
+            "mpPct": p.get("mpPct", 0),
+            "combat": bool(s.get("combat")),
             "tgt": (tgt or {}).get("name"),
+            "tgtHpPct": (tgt or {}).get("hpPct"),
             "tgtHostile": bool((tgt or {}).get("hostile")),
         }
 

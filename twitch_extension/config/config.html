@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ASCIIMUD — Broadcaster Config</title>
+  <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
+  <style>
+    body { background: #0a0e10; color: #d6ecd6; font-family: system-ui, sans-serif; padding: 24px; }
+    h1   { font-size: 18px; margin: 0 0 12px; }
+    label { display: block; margin: 12px 0 4px; font-size: 12px; color: #9fd0ff; }
+    input { width: 100%; padding: 8px; background: #0d1214; color: #d6ecd6;
+            border: 1px solid #4a6a4a; border-radius: 3px; font-family: monospace; }
+    button { margin-top: 16px; padding: 10px 18px; background: #9fd0ff; color: #0a0e10;
+             border: 0; border-radius: 3px; font-weight: 700; cursor: pointer; }
+    #status { margin-top: 12px; font-size: 12px; color: #4ade80; }
+  </style>
+</head>
+<body>
+  <h1>ASCIIMUD — Broadcaster Config</h1>
+  <p style="font-size: 13px; color: #aaa">
+    Set the URL of your ASCIIMUD EBS (e.g. <code>https://asciimud-ebs.fly.dev</code>) so
+    the extension can subscribe to the rich live stream. Leave blank to use only the
+    public PubSub digest.
+  </p>
+  <label for="ebsUrl">EBS URL</label>
+  <input id="ebsUrl" type="url" placeholder="https://asciimud-ebs.fly.dev" />
+  <button id="save">Save</button>
+  <div id="status"></div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    window.Twitch.ext.onAuthorized(function () {
+      const cfg = window.Twitch.ext.configuration.broadcaster;
+      if (cfg && cfg.content) {
+        try { $("ebsUrl").value = JSON.parse(cfg.content).ebsUrl || ""; } catch (_) {}
+      }
+    });
+
+    $("save").addEventListener("click", function () {
+      const content = JSON.stringify({ ebsUrl: $("ebsUrl").value.trim() });
+      window.Twitch.ext.configuration.set("broadcaster", "1", content);
+      $("status").textContent = "Saved.";
+    });
+  </script>
+</body>
+</html>

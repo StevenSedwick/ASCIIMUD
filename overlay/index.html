@@ -5,15 +5,41 @@
   <title>ASCIIMUD — Tactical Overlay</title>
   <link rel="stylesheet" href="style.css" />
 </head>
-<body>
+<body data-combat="0" data-target="0">
   <div id="frame">
     <header id="header">
-      <span id="zone">—</span>
-      <span id="player">—</span>
-      <span id="hp">HP —/—</span>
-      <span id="mp">MP —/—</span>
-      <span id="severity" data-level="0">SEV 0</span>
+      <div id="zoneBlock">
+        <span id="zoneLabel">ZONE</span>
+        <span id="zone">—</span>
+      </div>
+      <div id="severityBlock">
+        <span id="severity" data-level="0">SEV 0</span>
+      </div>
     </header>
+
+    <section id="vitals">
+      <div class="vital player">
+        <div class="vital-row">
+          <span class="vital-label">PLAYER</span>
+          <span class="vital-pct" id="hpPct">— %</span>
+        </div>
+        <div class="bar bar-hp"><div class="fill" id="hpFill"></div></div>
+        <div class="vital-row">
+          <span class="vital-label dim">MANA</span>
+          <span class="vital-pct dim" id="mpPct">— %</span>
+        </div>
+        <div class="bar bar-mp"><div class="fill" id="mpFill"></div></div>
+      </div>
+
+      <div class="vital target" id="targetCard">
+        <div class="vital-row">
+          <span class="vital-label" id="targetLabel">NO TARGET</span>
+          <span class="vital-pct" id="targetPct">— %</span>
+        </div>
+        <div class="bar bar-target"><div class="fill" id="targetFill"></div></div>
+        <div class="target-meta" id="targetMeta">—</div>
+      </div>
+    </section>
 
     <main>
       <pre id="grid" aria-label="tactical grid"></pre>

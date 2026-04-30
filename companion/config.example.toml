@@ -1,11 +1,14 @@
 [wow]
-# Absolute path to the WoW chat log written by /chatlog.
-# Classic Era default:
-#   C:\Program Files (x86)\World of Warcraft\_classic_era_\Logs\WoWChatLog.txt
-log_path = "C:/Program Files (x86)/World of Warcraft/_classic_era_/Logs/WoWChatLog.txt"
-# Combat log written by /combatlog (the addon enables this automatically).
-# Defaults to log_path's directory + WoWCombatLog.txt if omitted.
-combat_log_path = "C:/Program Files (x86)/World of Warcraft/_classic_era_/Logs/WoWCombatLog.txt"
+# Directory containing WoW logs. The companion auto-tails the newest
+# WoWChatLog*.txt and WoWCombatLog*.txt within this dir.
+log_dir = "C:/Program Files (x86)/World of Warcraft/_classic_era_/Logs"
+chat_log_pattern   = "WoWChatLog*.txt"
+combat_log_pattern = "WoWCombatLog*.txt"
+
+# Screenshot directory and pattern. The screen-grid encoder writes JPGs
+# here; the companion decodes them in real time.
+screenshots_dir     = "C:/Program Files (x86)/World of Warcraft/_classic_era_/Screenshots"
+screenshots_pattern = "WoWScrnShot_*.jpg"
 
 [server]
 host = "127.0.0.1"
@@ -14,6 +17,7 @@ port = 8765
 [ebs]
 # Optional. If set, the companion forwards every event to the cloud EBS too,
 # so the Twitch Extension can fan out to viewers. Leave url = "" to disable.
-url           = ""
-channel_id    = ""        # your Twitch numeric channel/user id
-shared_secret = ""        # must match ebs/config.toml -> ingest.shared_secret
+url           = ""             # e.g. "wss://asciimud-ebs.fly.dev"
+channel_id    = ""             # your Twitch numeric channel/user id
+shared_secret = ""             # must match ebs/config.toml -> ingest.shared_secret
+

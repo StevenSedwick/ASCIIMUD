@@ -275,6 +275,62 @@ async def ingest_combat(line: str, store: StateStore,
         await ebs.submit(json.dumps(evt))
 
 
+async def watch_screenshots(directory: Path, pattern: str, store: StateStore,
+                            hub: Hub, ebs: EBSForwarder | None,
+                            keep_last: int = 4) -> None:
+    """Decode every new screenshot dropping into ``directory`` matching
+    ``pattern`` and broadcast as a snapshot. Old shots are deleted to keep
+    disk usage bounded (we only need the newest)."""
+    from screen_decoder import decode, to_event  # local import — needs Pillow
+
+    LOG.info("Watching screenshots: %s/%s", directory, pattern)
+    seen: set[Path] = set()
+    # Don't reprocess shots taken before the companion started.
+    if directory.exists():
+        for p in directory.glob(pattern):
+            seen.add(p)
+
+    while True:
+        if not directory.exists():
+            await asyncio.sleep(2)
+            continue
+        files = sorted(directory.glob(pattern), key=lambda p: p.stat().st_mtime)
+        new = [p for p in files if p not in seen]
+        for p in new:
+            seen.add(p)
+            # Wait a beat for WoW to finish writing.
+            await asyncio.sleep(0.05)
+            try:
+                d = decode(p)
+            except Exception as exc:  # noqa: BLE001
+                LOG.warning("Decode failed for %s: %s", p.name, exc)
+                continue
+            if d is None or not d.magic_ok:
+                # Likely a manual screenshot (no grid). Ignore.
+                continue
+            if not d.checksum_ok:
+                LOG.debug("Checksum mismatch on %s", p.name)
+                continue
+            evt = to_event(d)
+            LOG.info("Snapshot tick=%d hp=%d%% mp=%d%% combat=%s zone=0x%X",
+                     d.tick, d.hp_pct, d.mp_pct, d.in_combat, d.zone_hash)
+            store.apply(evt)
+            await hub.broadcast(evt)
+            if ebs is not None:
+                await ebs.submit(json.dumps(evt))
+
+        # Trim old shots — keep only the newest `keep_last` of OUR screenshots.
+        if len(files) > keep_last:
+            for old in files[:-keep_last]:
+                try:
+                    old.unlink()
+                    seen.discard(old)
+                except OSError:
+                    pass
+
+        await asyncio.sleep(0.5)
+
+
 async def ws_handler(request: web.Request) -> web.WebSocketResponse:
     ws = web.WebSocketResponse(heartbeat=30)
     await ws.prepare(request)
@@ -317,6 +373,11 @@ async def main() -> None:
     log_dir = Path(cfg["wow"].get("log_dir", str(log_path.parent))).expanduser()
     combat_log_pattern = cfg["wow"].get("combat_log_pattern", "WoWCombatLog*.txt")
     chat_log_pattern = cfg["wow"].get("chat_log_pattern", "WoWChatLog*.txt")
+    screenshots_dir = Path(cfg["wow"].get(
+        "screenshots_dir",
+        str(log_path.parent.parent / "Screenshots")
+    )).expanduser()
+    screenshots_pattern = cfg["wow"].get("screenshots_pattern", "WoWScrnShot_*.jpg")
     host = cfg["server"].get("host", "127.0.0.1")
     port = int(cfg["server"].get("port", 8765))
 
@@ -347,12 +408,15 @@ async def main() -> None:
     await site.start()
     LOG.info("WebSocket server on ws://%s:%d/ws", host, port)
     LOG.info("Watching %s for %s and %s", log_dir, chat_log_pattern, combat_log_pattern)
+    LOG.info("Watching screenshots in %s", screenshots_dir)
 
     await asyncio.gather(
         tail_glob(log_dir, chat_log_pattern,
                   lambda l: ingest(l, store, hub, ebs), label="chat"),
         tail_glob(log_dir, combat_log_pattern,
                   lambda l: ingest_combat(l, store, coalescer, ebs), label="combat"),
+        watch_screenshots(screenshots_dir, screenshots_pattern,
+                          store, hub, ebs),
     )
 
 
