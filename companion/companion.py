@@ -185,6 +185,8 @@ async def tail(path: Path, on_line) -> None:
         while True:
             line = f.readline()
             if not line:
+                # On Windows, TextIOWrapper caches EOF — seek refreshes it.
+                f.seek(f.tell())
                 await asyncio.sleep(0.1)
                 continue
             await on_line(line.rstrip("\r\n"))
@@ -234,6 +236,8 @@ async def tail_glob(directory: Path, pattern: str, on_line, label: str = "") -> 
             assert f is not None
             line = f.readline()
             if not line:
+                # Windows TextIOWrapper caches EOF — re-seek to refresh.
+                f.seek(f.tell())
                 # Periodically re-scan in case a new file appeared.
                 await asyncio.sleep(0.25)
                 continue
