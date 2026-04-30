@@ -16,6 +16,8 @@ local function safeChatLog()
 end
 
 local function bootstrap()
+    -- Veil is already initialized at file-load (see Veil.lua bottom);
+    -- calling Init again is a no-op, but listed here for explicitness.
     ns.State:Init()
     ns.EventBus:Init()
     ns.Veil:Init()
