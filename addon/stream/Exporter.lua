@@ -14,7 +14,7 @@ local Exporter = {}
 ns.Exporter = Exporter
 
 local PREFIX        = "ASCIIMUD"
-local CHANNEL_NAME  = "asciimud_data"
+local CHANNEL_NAME  = "asciimud"
 local SNAPSHOT_HZ   = 2
 local MAX_LINE      = 240  -- WoW chat hard limit ~255 bytes; keep safety margin
 
