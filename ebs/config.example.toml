@@ -1,0 +1,17 @@
+[ingest]
+# Shared secret between this EBS and the home companion process.
+# Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+shared_secret = "REPLACE_ME"
+
+[twitch]
+# From the Twitch Extension dashboard:
+#   Settings -> Extension Client ID + Client Secret (Base64)
+client_id        = "REPLACE_ME"
+extension_secret = "REPLACE_ME_BASE64_SECRET"
+# Your own Twitch user_id (the extension owner). Numeric string.
+owner_user_id    = "0"
+
+[limits]
+# Hz caps. 1.0 for digest is the Twitch PubSub max per topic per channel.
+digest_hz = 1.0
+rich_hz   = 5.0

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ASCIIMUD — Broadcaster Configuration</title>
+  <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #0e0e10; color: #efeff1; padding: 24px; max-width: 640px; margin: 0 auto; }
+    label { display: block; margin: 14px 0 4px; font-size: 14px; }
+    input { width: 100%; padding: 8px; background: #1f1f23; color: #efeff1; border: 1px solid #3a3a3d; border-radius: 4px; font-family: inherit; }
+    button { margin-top: 18px; padding: 8px 16px; background: #9147ff; color: white; border: 0; border-radius: 4px; cursor: pointer; font-weight: 600; }
+    button:disabled { background: #3a3a3d; cursor: default; }
+    #status { margin-top: 12px; font-size: 13px; color: #adadb8; }
+    h1 { margin: 0 0 8px; }
+    p  { color: #adadb8; }
+  </style>
+</head>
+<body>
+  <h1>ASCIIMUD</h1>
+  <p>Configure the EBS endpoint and verify the connection before going live.</p>
+
+  <label for="ebs">EBS hostname (no protocol)</label>
+  <input id="ebs" placeholder="ebs.example.com" />
+
+  <label for="display">Display name shown to viewers</label>
+  <input id="display" placeholder="Your character name" />
+
+  <button id="save" disabled>Save</button>
+  <div id="status">waiting for Twitch authorization…</div>
+
+  <script src="config.js"></script>
+</body>
+</html>

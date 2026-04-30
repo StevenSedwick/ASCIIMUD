@@ -1,0 +1,16 @@
+{
+  "$schema_note": "This is a documentation mirror of the Twitch dashboard config, not consumed by Twitch. Edit the real values at https://dev.twitch.tv/console/extensions",
+  "name": "ASCIIMUD",
+  "summary": "Tactical ASCII overlay synced to the streamer's WoW Classic Era character.",
+  "description": "Viewers see a richer tactical UI driven by the streamer's ASCIIMUD addon: zone, HP, severity, and per-viewer interactivity.",
+  "version": "0.1.0",
+  "views": {
+    "viewer":      { "viewer_url":      "viewer/viewer.html",      "aspect_width": 16, "aspect_height": 9 },
+    "config":      { "config_url":      "config/config.html",      "viewer_url": "" },
+    "live_config": { "live_config_url": "live_config/live.html",   "viewer_url": "" }
+  },
+  "required_configurations": "broadcaster",
+  "allowed_release_state": "Hosted Test",
+  "permissions": ["pubsub.broadcast", "pubsub.whisper"],
+  "notes": "Update the EBS hostname in viewer.js and config.js before submitting."
+}

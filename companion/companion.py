@@ -22,6 +22,11 @@ from typing import Any
 
 from aiohttp import WSMsgType, web
 
+try:
+    import websockets  # type: ignore
+except ImportError:  # pragma: no cover - optional EBS forwarding
+    websockets = None  # type: ignore
+
 LOG = logging.getLogger("asciimud.companion")
 PREFIX = "ASCIIMUD|"
 
@@ -57,6 +62,47 @@ class Hub:
             self.clients.discard(ws)
 
 
+class EBSForwarder:
+    """Maintains an outbound WSS to the cloud EBS and forwards every event.
+
+    Reconnects on failure with exponential backoff; drops events while
+    disconnected (the EBS keeps last-known state per channel anyway).
+    """
+
+    def __init__(self, url: str, channel_id: str, shared_secret: str) -> None:
+        self.url = url.rstrip("/") + f"/ingest?channel={channel_id}&token={shared_secret}"
+        self.queue: asyncio.Queue[str] = asyncio.Queue(maxsize=1024)
+        self._task: asyncio.Task[None] | None = None
+
+    def start(self) -> None:
+        if websockets is None:
+            LOG.warning("EBS forwarding configured but `websockets` not installed.")
+            return
+        self._task = asyncio.create_task(self._run())
+
+    async def submit(self, evt_json: str) -> None:
+        try:
+            self.queue.put_nowait(evt_json)
+        except asyncio.QueueFull:
+            LOG.debug("EBS queue full, dropping event")
+
+    async def _run(self) -> None:
+        backoff = 1.0
+        while True:
+            try:
+                LOG.info("Connecting to EBS %s", self.url.split("?")[0])
+                async with websockets.connect(self.url, max_size=2 ** 20) as ws:
+                    backoff = 1.0
+                    LOG.info("EBS connected")
+                    while True:
+                        line = await self.queue.get()
+                        await ws.send(line)
+            except Exception as exc:  # noqa: BLE001 - keep reconnecting
+                LOG.warning("EBS link down (%s); retry in %.1fs", exc, backoff)
+                await asyncio.sleep(backoff)
+                backoff = min(30.0, backoff * 2)
+
+
 async def tail(path: Path, on_line) -> None:
     LOG.info("Tailing %s", path)
     while not path.exists():
@@ -72,7 +118,8 @@ async def tail(path: Path, on_line) -> None:
             await on_line(line.rstrip("\r\n"))
 
 
-async def ingest(line: str, store: StateStore, hub: Hub) -> None:
+async def ingest(line: str, store: StateStore, hub: Hub,
+                 ebs: EBSForwarder | None) -> None:
     idx = line.find(PREFIX)
     if idx < 0:
         return
@@ -84,6 +131,8 @@ async def ingest(line: str, store: StateStore, hub: Hub) -> None:
         return
     store.apply(evt)
     await hub.broadcast(evt)
+    if ebs is not None:
+        await ebs.submit(raw)
 
 
 async def ws_handler(request: web.Request) -> web.WebSocketResponse:
@@ -131,6 +180,16 @@ async def main() -> None:
     store = StateStore()
     hub = Hub()
 
+    ebs: EBSForwarder | None = None
+    ecfg = cfg.get("ebs", {})
+    if ecfg.get("url"):
+        ebs = EBSForwarder(
+            url=ecfg["url"],
+            channel_id=str(ecfg.get("channel_id", "")),
+            shared_secret=ecfg.get("shared_secret", ""),
+        )
+        ebs.start()
+
     app = web.Application()
     app["store"] = store
     app["hub"] = hub
@@ -143,7 +202,7 @@ async def main() -> None:
     await site.start()
     LOG.info("WebSocket server on ws://%s:%d/ws", host, port)
 
-    await tail(log_path, lambda l: ingest(l, store, hub))
+    await tail(log_path, lambda l: ingest(l, store, hub, ebs))
 
 
 if __name__ == "__main__":

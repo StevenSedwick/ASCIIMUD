@@ -7,3 +7,10 @@ log_path = "C:/Program Files (x86)/World of Warcraft/_classic_era_/Logs/WoWChatL
 [server]
 host = "127.0.0.1"
 port = 8765
+
+[ebs]
+# Optional. If set, the companion forwards every event to the cloud EBS too,
+# so the Twitch Extension can fan out to viewers. Leave url = "" to disable.
+url           = ""
+channel_id    = ""        # your Twitch numeric channel/user id
+shared_secret = ""        # must match ebs/config.toml -> ingest.shared_secret

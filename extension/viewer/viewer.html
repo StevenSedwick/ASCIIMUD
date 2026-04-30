@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ASCIIMUD Viewer</title>
+  <link rel="stylesheet" href="viewer.css" />
+  <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
+</head>
+<body>
+  <div id="panel">
+    <header>
+      <span id="zone">—</span>
+      <span id="sev" data-level="0">SEV 0</span>
+    </header>
+    <section id="meta">
+      <span id="player">—</span>
+      <span id="hp">HP —%</span>
+      <span id="target">no target</span>
+    </section>
+    <section id="rich" hidden>
+      <pre id="grid"></pre>
+      <div id="feed"></div>
+    </section>
+    <footer>
+      <button id="opt-in">Enable rich view</button>
+      <span id="status">connecting…</span>
+    </footer>
+  </div>
+  <script src="viewer.js"></script>
+</body>
+</html>

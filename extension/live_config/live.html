@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ASCIIMUD — Live Dashboard</title>
+  <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #0e0e10; color: #efeff1; padding: 16px; }
+    .row { display: flex; gap: 18px; margin-bottom: 8px; }
+    .k { color: #adadb8; min-width: 120px; }
+    .v { font-weight: 600; }
+    h1 { margin: 0 0 12px; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <h1>ASCIIMUD live dashboard</h1>
+  <div class="row"><span class="k">Channel</span><span id="ch" class="v">—</span></div>
+  <div class="row"><span class="k">EBS</span><span id="ebs" class="v">—</span></div>
+  <div class="row"><span class="k">Last digest</span><span id="last" class="v">—</span></div>
+  <div class="row"><span class="k">Viewers (rich)</span><span id="viewers" class="v">—</span></div>
+  <script src="live.js"></script>
+</body>
+</html>
