@@ -30,7 +30,7 @@ function Coalesce:Init()
         local now = GetTime()
         for k, b in pairs(buckets) do
             if now - b.last > WINDOW then
-                ns.Feed:Push(string.format("|cffffaa44%s x%d (%d dmg)|r", k, b.count, b.total))
+                ns.EventBus:Emit("COMBAT_SUMMARY", { spell = k, count = b.count, total = b.total })
                 buckets[k] = nil
             end
         end

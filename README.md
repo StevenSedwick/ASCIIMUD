@@ -1,19 +1,24 @@
 # ASCIIMUD
 
-A tactical ASCII MUD overlay for **World of Warcraft Classic Era**.
+A **headless event-streaming pipeline** for **World of Warcraft Classic Era**.
 
-ASCIIMUD replaces the default WoW UI with a full-screen text interface — an ASCII
-tactical grid, a scrolling event feed, and severity-driven effects — and streams
-the same world state out to an OBS browser source so chat sees a richer view than
-you do.
+ASCIIMUD observes your character and emits structured NDJSON events that drive
+an OBS browser-source overlay (and, in Phase B, a Twitch Extension) — giving
+your chat viewers a richer tactical view than you see yourself.
+
+The in-game UI for the player is owned by a separate addon
+(**TextAdventurer**); ASCIIMUD draws nothing on screen — it only listens and
+exports.
 
 ## Components
 
 | Path         | Purpose                                                          |
 | ------------ | ---------------------------------------------------------------- |
-| `addon/`     | The in-game WoW addon. Drop into `Interface/AddOns/ASCIIMUD`.   |
+| `addon/`     | Headless WoW addon. Hooks events, writes NDJSON to chat log.     |
 | `companion/` | Python process that tails `WoWChatLog.txt` and runs a WS server. |
 | `overlay/`   | OBS browser-source UI that consumes the WS stream.               |
+| `ebs/`       | (Phase B) Cloud EBS for the Twitch Extension.                    |
+| `extension/` | (Phase B) Twitch Extension viewer/config/live panels.            |
 | `docs/`      | Architecture, setup, event schema.                               |
 
 ## Quick start
@@ -22,8 +27,8 @@ See [`docs/SETUP.md`](docs/SETUP.md).
 
 ## Roadmap
 
-- **Phase A** *(this scaffold)* — addon + companion + OBS overlay.
-- **Phase B** — Twitch Extension + EBS for in-stream interactivity.
+- **Phase A** *(current)* — headless addon + companion + OBS overlay.
+- **Phase B** *(scaffolded)* — Twitch Extension + EBS for in-stream interactivity.
 - **Phase C** — Optional LLM narrator + TTS.
 
 ## License

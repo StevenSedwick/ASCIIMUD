@@ -1,12 +1,14 @@
 -- Init.lua : bootstrap, slash commands, /chatlog auto-enable.
+-- ASCIIMUD is a HEADLESS pipeline addon — it draws no UI of its own.
+-- The in-game UI is owned by TextAdventurer. ASCIIMUD only observes
+-- game state and emits NDJSON events to the chat log for the companion
+-- process (which feeds the OBS overlay and Twitch extension).
 local addonName, ns = ...
 ASCIIMUD = ns
 
-ns.version = "0.1.0"
+ns.version = "0.2.0"
 
 local function safeChatLog()
-    -- Blizzard silently no-ops LoggingChat if called too early on login.
-    -- Defer to ensure the chat system is fully wired up first.
     C_Timer.After(2, function()
         if not LoggingChat() then
             LoggingChat(true)
@@ -16,20 +18,13 @@ local function safeChatLog()
 end
 
 local function bootstrap()
-    -- Veil is already initialized at file-load (see Veil.lua bottom);
-    -- calling Init again is a no-op, but listed here for explicitness.
     ns.State:Init()
     ns.EventBus:Init()
-    ns.Veil:Init()
-    ns.Header:Init()
-    ns.Grid:Init()
-    ns.Feed:Init()
-    ns.Effects:Init()
     ns.Severity:Init()
     ns.Coalesce:Init()
     ns.Exporter:Init()
     safeChatLog()
-    ns.Feed:Push("ASCIIMUD v" .. ns.version .. " online.")
+    print(string.format("|cff66ccffASCIIMUD|r v%s online (headless stream pipeline).", ns.version))
 end
 
 local f = CreateFrame("Frame")
@@ -42,15 +37,21 @@ SLASH_ASCIIMUD1 = "/asciimud"
 SLASH_ASCIIMUD2 = "/mud"
 SlashCmdList.ASCIIMUD = function(msg)
     msg = (msg or ""):lower():match("^%s*(.-)%s*$")
-    if msg == "off" or msg == "hide" then
-        ns.Veil:Hide()
-    elseif msg == "on" or msg == "show" then
-        ns.Veil:Show()
-    elseif msg == "toggle" or msg == "" then
-        ns.Veil:Toggle()
+    if msg == "status" then
+        local s = ns.State:Snapshot()
+        print(string.format("|cff66ccffASCIIMUD|r tick=%d zone=%s combat=%s",
+            s.tick, s.zone.name, tostring(s.combat)))
     elseif msg == "reload" then
         ReloadUI()
+    elseif msg == "chatlog" then
+        if LoggingChat() then
+            print("|cff66ccffASCIIMUD|r: chat log already enabled.")
+        else
+            LoggingChat(true)
+            print("|cff66ccffASCIIMUD|r: chat log enabled.")
+        end
     else
-        print("|cff66ccffASCIIMUD|r commands: /mud [on|off|toggle|reload]")
+        print("|cff66ccffASCIIMUD|r commands: /mud [status|reload|chatlog]")
+        print("  This addon is headless. Use TextAdventurer for the in-game UI.")
     end
 end

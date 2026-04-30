@@ -1,8 +1,8 @@
 ## Interface: 11507
-## Title: ASCIIMUD
-## Notes: Tactical ASCII MUD overlay for WoW Classic Era
+## Title: ASCIIMUD (Stream Pipeline)
+## Notes: Headless event exporter for OBS/Twitch overlay. Pairs with TextAdventurer for the in-game UI.
 ## Author: StevenSedwick
-## Version: 0.1.0
+## Version: 0.2.0
 ## SavedVariables: ASCIIMUDDB
 ## SavedVariablesPerCharacter: ASCIIMUDCharDB
 ## DefaultState: enabled
@@ -11,15 +11,9 @@ libs\json.lua
 
 core\State.lua
 core\EventBus.lua
-core\Veil.lua
 
 systems\Severity.lua
 systems\Coalesce.lua
-
-render\Grid.lua
-render\Feed.lua
-render\Header.lua
-render\Effects.lua
 
 stream\Exporter.lua
 

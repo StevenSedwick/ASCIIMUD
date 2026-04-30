@@ -29,4 +29,7 @@ function Exporter:Init()
     ns.EventBus:On("PLAYER_DEAD", function()
         emit({ t = "death", player = ns.State.player.name })
     end)
+    ns.EventBus:On("COMBAT_SUMMARY", function(s)
+        emit({ t = "combat_summary", spell = s.spell, count = s.count, total = s.total })
+    end)
 end
