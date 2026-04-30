@@ -1,0 +1,9 @@
+[wow]
+# Absolute path to the WoW chat log written by /chatlog.
+# Classic Era default:
+#   C:\Program Files (x86)\World of Warcraft\_classic_era_\Logs\WoWChatLog.txt
+log_path = "C:/Program Files (x86)/World of Warcraft/_classic_era_/Logs/WoWChatLog.txt"
+
+[server]
+host = "127.0.0.1"
+port = 8765

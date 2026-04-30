@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ASCIIMUD — Tactical Overlay</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="frame">
+    <header id="header">
+      <span id="zone">—</span>
+      <span id="player">—</span>
+      <span id="hp">HP —/—</span>
+      <span id="mp">MP —/—</span>
+      <span id="severity" data-level="0">SEV 0</span>
+    </header>
+
+    <main>
+      <pre id="grid" aria-label="tactical grid"></pre>
+      <section id="feed" aria-label="event feed"></section>
+    </main>
+
+    <footer id="status">disconnected</footer>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
