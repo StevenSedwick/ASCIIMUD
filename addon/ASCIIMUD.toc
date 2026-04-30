@@ -16,5 +16,6 @@ systems\Severity.lua
 systems\Coalesce.lua
 
 stream\Exporter.lua
+stream\ScreenGrid.lua
 
 core\Init.lua

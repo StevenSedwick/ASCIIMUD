@@ -23,6 +23,7 @@ local function bootstrap()
     ns.Severity:Init()
     ns.Coalesce:Init()
     ns.Exporter:Init()
+    ns.ScreenGrid:Init()
     safeChatLog()
     print(string.format("|cff66ccffASCIIMUD|r v%s online (headless stream pipeline).", ns.version))
 end
@@ -50,8 +51,11 @@ SlashCmdList.ASCIIMUD = function(msg)
             LoggingChat(true)
             print("|cff66ccffASCIIMUD|r: chat log enabled.")
         end
+    elseif msg == "grid" then
+        ns.ScreenGrid:Toggle()
+        print("|cff66ccffASCIIMUD|r: grid toggled.")
     else
-        print("|cff66ccffASCIIMUD|r commands: /mud [status|reload|chatlog]")
+        print("|cff66ccffASCIIMUD|r commands: /mud [status|reload|chatlog|grid]")
         print("  This addon is headless. Use TextAdventurer for the in-game UI.")
     end
 end
