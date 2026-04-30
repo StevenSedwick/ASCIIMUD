@@ -1,6 +1,6 @@
 """Decode the ASCIIMUD ScreenGrid from a WoW screenshot.
 
-The addon renders an 8x8 grid of black/white squares in the bottom-right
+The addon renders a 16x8 grid of black/white squares in the bottom-right
 corner of the WoW window:
     * each cell is CELL_PX pixels square
     * grid is anchored CORNER_OFF_X from the right edge,
@@ -9,13 +9,18 @@ corner of the WoW window:
     * cells read row-major, top-left first
 
 Schema (must mirror addon/stream/ScreenGrid.lua):
-    byte0  = magic = 0xA5
-    byte1  = tick % 256
-    byte2  = bits 7..1: HP%, bit 0: in_combat
-    byte3  = bits 7..1: MP%, bit 0: target_hostile
-    byte4..5 = zone hash (16 bits, big-endian)
-    byte6  = bits 7..1: target_hp%, bit 0: has_target
-    byte7  = checksum = sum(byte0..byte6) % 256
+    byte0      = magic = 0xA5
+    byte1      = tick % 256
+    byte2      = bits 7..1: HP%, bit 0: in_combat
+    byte3      = bits 7..1: MP%, bit 0: target_hostile
+    byte4..5   = zone hash (16 bits, big-endian, FNV-1a of GetZoneText())
+    byte6      = bits 7..1: target_hp%, bit 0: has_target
+    byte7      = bits 7..1: level (1-60), bit 0: is_resting
+    byte8      = map X position (0-255, normalised from C_Map 0..1)
+    byte9      = map Y position (0-255, normalised from C_Map 0..1)
+    byte10..13 = reserved (zero)
+    byte14     = checksum = sum(bytes 0..13) % 256
+    byte15     = reserved (zero)
 """
 
 from __future__ import annotations
@@ -30,10 +35,13 @@ except ImportError as e:  # pragma: no cover - hard dep
     raise SystemExit("Install Pillow: pip install Pillow") from e
 
 CELL_PX      = 12
-GRID_CELLS   = 8
+GRID_COLS    = 16
+GRID_ROWS    = 8
+TOTAL_BYTES  = 16   # GRID_COLS * GRID_ROWS / 8
 CORNER_OFF_X = 8
 CORNER_OFF_Y = 8
-SIZE_PX      = CELL_PX * GRID_CELLS
+SIZE_W       = CELL_PX * GRID_COLS   # 192 px
+SIZE_H       = CELL_PX * GRID_ROWS   # 96 px
 MAGIC        = 0xA5
 
 # White/black threshold on luminance (0..255). JPG compression smears edges,
@@ -53,6 +61,10 @@ class Decoded:
     has_target: bool
     target_hp_pct: int
     zone_hash: int
+    level: int
+    is_resting: bool
+    map_x: int   # 0-255 normalised map X
+    map_y: int   # 0-255 normalised map Y
     raw_bytes: bytes
 
 
@@ -62,12 +74,13 @@ def _luma(px) -> int:
 
 
 def _find_grid_bbox(img: Image.Image) -> tuple[int, int, int, int] | None:
-    """Auto-detect the grid bounding box in the bottom-right ~200x200 region.
+    """Auto-detect the grid bounding box in the bottom-right corner.
     Returns (left, top, right, bottom) inclusive or None if no white pixels found.
+    Grid is 16 cols × 8 rows = 192×96 px, so search a 230×130 region.
     """
     w, h = img.size
-    search_w = min(110, w)
-    search_h = min(110, h)
+    search_w = min(230, w)
+    search_h = min(130, h)
     x0 = w - search_w
     y0 = h - search_h
     px = img.load()
@@ -100,28 +113,28 @@ def decode(path: Path) -> Decoded | None:
             return None
         left, top, right, bottom = bbox
         # Cell size from bounding box; +1 because bbox is inclusive.
-        cell_w = (right - left + 1) / GRID_CELLS
-        cell_h = (bottom - top + 1) / GRID_CELLS
+        cell_w = (right - left + 1) / GRID_COLS
+        cell_h = (bottom - top + 1) / GRID_ROWS
         # Sanity: cells need a minimum width to decode reliably.
         if cell_w < 4 or cell_h < 4:
             return None
         px = im.load()
         bits: list[int] = []
-        for row in range(GRID_CELLS):
-            for col in range(GRID_CELLS):
+        for row in range(GRID_ROWS):
+            for col in range(GRID_COLS):
                 cx = int(left + col * cell_w + cell_w / 2)
                 cy = int(top + row * cell_h + cell_h / 2)
                 bits.append(1 if _luma(px[cx, cy]) >= LUMA_THRESH else 0)
 
     raw = bytearray()
-    for byte_idx in range(8):
+    for byte_idx in range(TOTAL_BYTES):
         b = 0
         for bit_idx in range(8):
             b = (b << 1) | bits[byte_idx * 8 + bit_idx]
         raw.append(b)
 
     magic_ok = raw[0] == MAGIC
-    checksum_ok = (sum(raw[:7]) % 256) == raw[7]
+    checksum_ok = (sum(raw[:14]) % 256) == raw[14]
     return Decoded(
         magic_ok=magic_ok,
         checksum_ok=checksum_ok,
@@ -133,6 +146,10 @@ def decode(path: Path) -> Decoded | None:
         zone_hash=(raw[4] << 8) | raw[5],
         target_hp_pct=(raw[6] >> 1) & 0x7F,
         has_target=bool(raw[6] & 0x01),
+        level=(raw[7] >> 1) & 0x7F,
+        is_resting=bool(raw[7] & 0x01),
+        map_x=raw[8],
+        map_y=raw[9],
         raw_bytes=bytes(raw),
     )
 
@@ -152,8 +169,14 @@ def to_event(d: Decoded) -> dict[str, Any]:
             "player": {
                 "hpPct": d.hp_pct,
                 "mpPct": d.mp_pct,
+                "level": d.level,
+                "resting": d.is_resting,
             },
-            "zone": {"hash": d.zone_hash},
+            "zone": {
+                "hash": d.zone_hash,
+                "mapX": d.map_x,
+                "mapY": d.map_y,
+            },
             "combat": d.in_combat,
             "target": target,
         },

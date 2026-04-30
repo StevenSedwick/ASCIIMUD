@@ -152,19 +152,53 @@ main {
   min-height: 0;
 }
 
-#grid {
-  margin: 0;
-  padding: 12px;
-  font-size: 16px;
-  line-height: 1.05;
-  color: #8fdc8f;
-  text-shadow: 0 0 6px rgba(120, 220, 120, 0.25);
-  white-space: pre;
+/* ---------- minimap -------------------------------------------------- */
+#minimapPanel {
+  display: flex;
+  flex-direction: column;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 4px;
   overflow: hidden;
 }
+
+#minimapHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px 4px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+#minimapZoneName {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--accent);
+  text-shadow: 0 0 8px rgba(159, 208, 255, 0.3);
+}
+
+#minimapCoords {
+  font-size: 10px;
+  color: var(--dim);
+  letter-spacing: 1px;
+  font-variant-numeric: tabular-nums;
+}
+
+#minimap {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 11px;
+  line-height: 1.15;
+  color: #4a7a5a;
+  white-space: pre;
+  overflow: hidden;
+  flex: 1;
+}
+
+/* Player marker bright, trail dots dim */
+#minimap { font-family: var(--font); }
 
 #feed {
   overflow-y: auto;

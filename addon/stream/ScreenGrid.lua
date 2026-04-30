@@ -10,17 +10,19 @@
 -- This file is the in-game half: the grid + the tick. Decoding is in
 -- companion/screenshot_decoder.py.
 --
--- Schema currently encoded (in cell index order, MSB first per byte):
---   cells 00..07  byte0  = magic        (0xA5  marker so we can sync)
---   cells 08..15  byte1  = tick % 256   (heartbeat)
---   cells 16..22  bits   = HP%/100 * 100 (0..100, 7 bits)
---   cell  23      bit    = combat       (1 = in combat)
---   cells 24..30  bits   = MP%/100 * 100 (0..100, 7 bits)
---   cell  31      bit    = target hostile
---   cells 32..47  byte4..5 zone id hash (16 bits)
---   cells 48..54  bits   = target HP%/100 * 100 (0..100, 7 bits)
---   cell  55      bit    = has target (1 = target exists)
---   cells 56..63  byte7  = checksum (sum of bytes 0..6 mod 256)
+-- Schema currently encoded (16x8 grid = 128 cells = 16 bytes):
+--   byte0   = magic (0xA5)
+--   byte1   = tick % 256
+--   byte2   bits 7..1: HP%, bit 0: in_combat
+--   byte3   bits 7..1: MP%, bit 0: target_hostile
+--   byte4..5 zone hash (16 bits big-endian, FNV-1a of GetZoneText())
+--   byte6   bits 7..1: target HP%, bit 0: has_target
+--   byte7   bits 7..1: level (1-60), bit 0: is_resting
+--   byte8   map X position (0-255, normalised from C_Map 0..1)
+--   byte9   map Y position (0-255, normalised from C_Map 0..1)
+--   byte10..13 reserved (zero)
+--   byte14  checksum = sum(bytes 0..13) % 256
+--   byte15  reserved (zero)
 
 local _, ns = ...
 local ScreenGrid = {}
@@ -29,11 +31,13 @@ ns.ScreenGrid = ScreenGrid
 -- Tunable.
 local TICK_SECS    = 2.0    -- how often to snap
 local CELL_PX      = 12     -- size of each cell on screen, must be >= 4 to decode reliably
-local GRID_CELLS   = 8      -- 8x8 = 64 bits = 8 bytes per shot
+local GRID_COLS    = 16     -- 16 columns × 8 rows = 128 bits = 16 bytes
+local GRID_ROWS    = 8
 local CORNER_OFF_X = 8      -- pixels from screen edge
 local CORNER_OFF_Y = 8
 
-local SIZE_PX = CELL_PX * GRID_CELLS
+local SIZE_W = CELL_PX * GRID_COLS
+local SIZE_H = CELL_PX * GRID_ROWS
 
 local frame, cells, ticker
 local tickCounter = 0
@@ -51,7 +55,7 @@ local function setCellBit(idx, bit)
 end
 
 local function setByte(byteIdx, value)
-    -- byteIdx 0..7. MSB written into the lower-numbered cell (left-to-right reading).
+    -- byteIdx 0..15. MSB written into the lower-numbered cell (left-to-right reading).
     value = value % 256
     for b = 0, 7 do
         local bit = math.floor(value / (2 ^ (7 - b))) % 2
@@ -85,13 +89,13 @@ local function build()
     frame = CreateFrame("Frame", "ASCIIMUDGrid", UIParent)
     -- Force 1:1 logical-units-to-pixels so the decoder knows exact coords.
     frame:SetScale(1 / UIParent:GetEffectiveScale())
-    frame:SetSize(SIZE_PX, SIZE_PX)
+    frame:SetSize(SIZE_W, SIZE_H)
     frame:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -CORNER_OFF_X, CORNER_OFF_Y)
     frame:SetFrameStrata("TOOLTIP")
     cells = {}
-    for row = 0, GRID_CELLS - 1 do
-        for col = 0, GRID_CELLS - 1 do
-            local idx = row * GRID_CELLS + col
+    for row = 0, GRID_ROWS - 1 do
+        for col = 0, GRID_COLS - 1 do
+            local idx = row * GRID_COLS + col
             local t = frame:CreateTexture(nil, "OVERLAY")
             t:SetSize(CELL_PX, CELL_PX)
             -- Row 0 = top of grid.
@@ -134,29 +138,64 @@ local function encodeSnapshot()
     if hpPct > 100 then hpPct = 100 end
     if mpPct > 100 then mpPct = 100 end
 
+    local level = UnitLevel("player") or 1
+    if level < 1 then level = 1 end
+    if level > 127 then level = 127 end
+    local isResting = IsResting() and 1 or 0
+
     local zoneName = GetZoneText() or ""
     local zoneHash = fnv1a8(zoneName)
 
-    -- byte 6: bits 0..6 = targetHpPct, bit 7 = hasTarget (LSB)
-    local byte6 = targetHpPct * 2 + hasTarget
+    -- Map position: C_Map returns 0..1 floats; encode as 0..255.
+    local mapX, mapY = 127, 127
+    if C_Map and C_Map.GetBestMapForUnit then
+        local ok, result = pcall(function()
+            local mapID = C_Map.GetBestMapForUnit("player")
+            if mapID then
+                return C_Map.GetPlayerMapPosition(mapID, "player")
+            end
+        end)
+        if ok and result then
+            local px, py = result:GetXY()
+            mapX = math.floor(math.max(0, math.min(1, px)) * 255)
+            mapY = math.floor(math.max(0, math.min(1, py)) * 255)
+        end
+    end
 
-    setByte(0, 0xA5)          -- magic marker
+    -- byte6: bits 7..1 = targetHpPct, bit 0 = hasTarget
+    local byte6 = targetHpPct * 2 + hasTarget
+    -- byte7: bits 7..1 = level, bit 0 = isResting
+    local byte7 = level * 2 + isResting
+
+    setByte(0, 0xA5)
     setByte(1, tickCounter)
-    setBits(16, 7, hpPct)     -- cells 16..22
-    setCellBit(23, inCombat)  -- cell 23
-    setBits(24, 7, mpPct)     -- cells 24..30
-    setCellBit(31, targetHostile)  -- cell 31
-    setByte(4, math.floor(zoneHash / 256))  -- high byte
-    setByte(5, zoneHash % 256)              -- low byte
-    setByte(6, byte6)                       -- target HP + hasTarget
-    -- checksum: sum of bytes 0..6 mod 256
+    setBits(16, 7, hpPct)
+    setCellBit(23, inCombat)
+    setBits(24, 7, mpPct)
+    setCellBit(31, targetHostile)
+    setByte(4, math.floor(zoneHash / 256))
+    setByte(5, zoneHash % 256)
+    setByte(6, byte6)
+    setByte(7, byte7)
+    setByte(8, mapX)
+    setByte(9, mapY)
+    setByte(10, 0)  -- reserved
+    setByte(11, 0)
+    setByte(12, 0)
+    setByte(13, 0)
+    -- checksum over bytes 0..13
     local sum = 0xA5 + tickCounter
-                + math.floor(hpPct * 2 + inCombat)        -- byte2 reconstructed
-                + math.floor(mpPct * 2 + targetHostile)   -- byte3 reconstructed
+                + (hpPct * 2 + inCombat)
+                + (mpPct * 2 + targetHostile)
                 + math.floor(zoneHash / 256)
                 + (zoneHash % 256)
                 + byte6
-    setByte(7, sum % 256)
+                + byte7
+                + mapX
+                + mapY
+                -- bytes 10-13 are zero, contribute 0
+    setByte(14, sum % 256)
+    setByte(15, 0)  -- reserved
 end
 
 local function tick()
@@ -186,7 +225,7 @@ function ScreenGrid:Init()
     ticker = C_Timer.NewTicker(TICK_SECS, tick)
     print(string.format(
         "|cff66ccffASCIIMUD|r: screen grid %dx%d (%dpx cells) snapping every %.1fs.",
-        GRID_CELLS, GRID_CELLS, CELL_PX, TICK_SECS))
+        GRID_COLS, GRID_ROWS, CELL_PX, TICK_SECS))
 end
 
 function ScreenGrid:Show() if frame then frame:Show() end end

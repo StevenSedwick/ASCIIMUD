@@ -10,32 +10,248 @@ const els = {
   targetCard: $("targetCard"), targetLabel: $("targetLabel"),
   targetFill: $("targetFill"), targetPct: $("targetPct"), targetMeta: $("targetMeta"),
   severity: $("severity"),
-  grid: $("grid"),
+  minimap: $("minimap"),
+  minimapZoneName: $("minimapZoneName"),
+  minimapCoords: $("minimapCoords"),
   feed: $("feed"),
   status: $("status"),
 };
 
-const COLS = 60, ROWS = 18;
-
-// Zone-hash → human name lookup. Fnv1a8(name) computed by the addon.
-// Add zones as you discover them (companion logs the hash).
+// ---------- Zone name lookup (FNV-1a 16-bit of GetZoneText()) ----------
 const ZONE_NAMES = {
-  // Pre-fill examples; companion can also resolve via combat-log SOURCE_GUID context.
-  // 0xF014: "Tirisfal Glades",
+  0xFB88: "Dun Morogh",
+  0x17FD: "Elwynn Forest",
+  0x390C: "Teldrassil",
+  0x53C4: "Durotar",
+  0x46DE: "Mulgore",
+  0x013F: "Tirisfal Glades",
+  0x274B: "Stormwind City",
+  0x6D5A: "Ironforge",
+  0x77E3: "Darnassus",
+  0xE6C5: "Orgrimmar",
+  0x2DE4: "Thunder Bluff",
+  0xAC6A: "Undercity",
+  0xBBA7: "The Barrens",
+  0x25FB: "Westfall",
+  0xC6F0: "Loch Modan",
+  0x85EB: "Redridge Mountains",
+  0x4A32: "Darkshore",
+  0x771E: "Ashenvale",
+  0x7ACA: "Hillsbrad Foothills",
+  0x9BEB: "Wetlands",
+  0x7D02: "Arathi Highlands",
+  0x8393: "Silverpine Forest",
+  0xB66A: "Stonetalon Mountains",
+  0xCD97: "Desolace",
+  0x32D7: "Thousand Needles",
+  0xCCAB: "Feralas",
+  0xF0AF: "Tanaris",
+  0x9631: "Un'Goro Crater",
+  0x171E: "Silithus",
+  0xFEF3: "Eastern Plaguelands",
+  0x713D: "Western Plaguelands",
+  0xE409: "Winterspring",
+  0xE8E5: "Azshara",
+  0x653D: "Felwood",
+  0x9B71: "Moonglade",
+  0xFBE6: "Deadwind Pass",
+  0x7803: "Alterac Mountains",
+  0xA3CA: "Badlands",
+  0x615E: "Burning Steppes",
+  0xA332: "Searing Gorge",
+  0xEB05: "Swamp of Sorrows",
+  0x51B2: "Blasted Lands",
+  0xBA0C: "Dustwallow Marsh",
+  0xB4AE: "Stranglethorn Vale",
+  0xBA63: "Hinterlands",
 };
 
-function blankGrid() {
-  return Array.from({ length: ROWS }, () => ".".repeat(COLS));
+// ---------- Zone ASCII art maps (40 wide × 14 tall) ----------
+// Legend: . open  # mountain/wall  ~ water  ^ forest  * town  = road
+// Player '@' and trail '·' are overlaid at runtime using mapX/mapY (0-255).
+const MAP_W = 40, MAP_H = 14;
+
+const ZONE_MAPS = {
+  0xFB88: [ // Dun Morogh
+    "########################################",
+    "#####^^^############################^^^^",
+    "####^^^^^###########^^^^##########^^^^^^",
+    "##^^^^^^^##~~~~~##^^^^^##########^^^^^^^",
+    "#^^^^^^^^^#~~~~~#^^^^^^^^^^^^^^^^*ironf*",
+    "##^^^^^^^^^######^^^^^^^^^^^^^^^^=======",
+    "####^^^^^^^^^^^^^^^^^^*kharanos*========",
+    "#####^^^^^^^^^^^^^^^^^==================",
+    "######^^^^^^^^^.......==================",
+    "########^^^^^^^.......====*steelgrill*==",
+    "##########^^^^^.......==================",
+    "############^^^^^^^^.....===============",
+    "##############^^^^^^^^^.................",
+    "####################^^^^################",
+  ],
+  0x17FD: [ // Elwynn Forest
+    "........................................",
+    ".....*stormwind*........................",
+    "........========================........",
+    "...^^^..========================..^^^...",
+    "..^^^^^.=====.........==========.^^^^^..",
+    ".^^^^^^^=====...*goldshire*.=====.^^^^^.",
+    "..^^^^^^=====...............=====.^^^^^.",
+    "...^^^^^=====...............=====.......",
+    "....^^^..====...............=====.......",
+    ".....^...====...~~lakeshire~=====.......",
+    "..........===...~~~~~~~~~~~~~~~~~~~~~...",
+    "...........==...........................",
+    "............============================",
+    "........................................",
+  ],
+  0x53C4: [ // Durotar
+    "........................................",
+    "....*orgrimmar*..........................",
+    "...........=====================........",
+    "..#........=====================.......#",
+    ".###.......=====================......##",
+    "..##.......=====.......=====..........##",
+    "...#.......=====.......=====.........###",
+    "....#......=====.......=====.........###",
+    ".....#.....=====..*.....====........####",
+    "......#....=====.......=====.......#####",
+    ".......####============#####......######",
+    "........####..........######.....#######",
+    ".........######.....########....########",
+    "################....#######################",
+  ],
+  0x46DE: [ // Mulgore
+    "........................................",
+    "...####..................................",
+    "..######..............*thunder bluff*...",
+    "..######..^^...........................",
+    ".########.^^^..........................",
+    "..########.^^......*camp narache*......",
+    "...######...................................",
+    "....######..................................",
+    ".....######.................................",
+    "......######.......*bloodhoof village*......",
+    ".......#####################################",
+    "........####################################",
+    ".........###################################",
+    "..........##################################",
+  ],
+  0x013F: [ // Tirisfal Glades
+    "~~~~~~~~~~~~~~~~~~~~####################",
+    "~~~~~~~~~~~~~~~~~~~~####################",
+    "~~~~~~~~~~~~~~~~~~~~^^^#################",
+    "~~~~~~~~~~~~~~~~~~~~^^^###^^^###########",
+    "~~~~~~~~~~~~~*.undercity*.^^^###########",
+    "..............===========.^^^###########",
+    "...............==========.^^^###########",
+    "................=========..^^###########",
+    ".................========..^^###########",
+    "..................=======...^############",
+    "...................======....############",
+    "....*brill*..........====....###########",
+    ".....................................####",
+    "........................................",
+  ],
+  0xBBA7: [ // The Barrens
+    "........................................",
+    "...#.....................................",
+    "..##....*crossroads*....................",
+    ".###....========================........",
+    ".###....========================........",
+    ".###....====....................",
+    "..##....====.....*camp taurajo*.",
+    "...#....====.....................",
+    "....#...====.....................",
+    ".....#..====.....................",
+    "......##====.....................",
+    ".......#====..~razorfen~.........",
+    ".......#====..~~~~~~~~~..........",
+    "........####......................",
+  ],
+  0x25FB: [ // Westfall
+    "........................................",
+    "........................................",
+    "......*sentinel hill*....................",
+    ".......=========================........",
+    "..^^^^^=========================..^^^^^.",
+    "..^^^^^=====.............=======..^^^^^.",
+    "..^^^^^=====.............=======..^^^^^.",
+    "..^^^^^=====.............=======..^^^^^.",
+    "..^^^^^=====.............=======..^^^^^.",
+    "..^^^^^=====.............=======..^^^^^.",
+    "~~~~~~~~====.............=======~~~~~~~~",
+    "~~~~~~~~~~~~~~~~~~.....~~~~~~~~~~~~~~~~~",
+    "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+    "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~",
+  ],
+};
+
+// ---------- Minimap state ----------
+const TRAIL_LEN = 20;
+let trailHistory = [];   // [{x,y}] recent positions (normalised 0-1)
+let currentZoneHash = null;
+
+function getZoneMap(hash) {
+  return ZONE_MAPS[hash] || null;
 }
 
-function renderGrid(snap) {
-  const g = blankGrid().map(r => r.split(""));
-  const pr = Math.floor(ROWS / 2), pc = Math.floor(COLS / 2);
-  g[pr][pc] = "@";
-  if (snap.target && snap.target.exists) {
-    g[pr][pc + 4] = snap.target.hostile ? "X" : "N";
+function renderMinimap(snap) {
+  const z = snap.zone || {};
+  const hash = z.hash;
+  const mapX = z.mapX;  // 0-255
+  const mapY = z.mapY;  // 0-255
+
+  const zoneName = ZONE_NAMES[hash]
+    || (hash != null ? `zone#${hash.toString(16).toUpperCase().padStart(4,"0")}` : "—");
+  els.minimapZoneName.textContent = zoneName.toUpperCase();
+
+  // Reset trail when zone changes.
+  if (hash !== currentZoneHash) {
+    trailHistory = [];
+    currentZoneHash = hash;
   }
-  els.grid.textContent = g.map(r => r.join("")).join("\n");
+
+  if (mapX == null || mapY == null) {
+    els.minimap.textContent = blankMap().join("\n");
+    els.minimapCoords.textContent = "";
+    return;
+  }
+
+  const nx = mapX / 255;
+  const ny = mapY / 255;
+  const col = Math.round(nx * (MAP_W - 1));
+  const row = Math.round(ny * (MAP_H - 1));
+
+  // Add to trail (deduplicate consecutive same position).
+  const last = trailHistory[trailHistory.length - 1];
+  if (!last || last.col !== col || last.row !== row) {
+    trailHistory.push({ col, row });
+    if (trailHistory.length > TRAIL_LEN) trailHistory.shift();
+  }
+
+  // Build map grid.
+  const art = getZoneMap(hash);
+  const grid = (art || blankMap()).map(line => line.split(""));
+
+  // Draw trail dots (skip if occupied by player pos).
+  for (let i = 0; i < trailHistory.length - 1; i++) {
+    const { col: tc, row: tr } = trailHistory[i];
+    if (tr >= 0 && tr < MAP_H && tc >= 0 && tc < MAP_W) {
+      grid[tr][tc] = "·";
+    }
+  }
+
+  // Draw player.
+  if (row >= 0 && row < MAP_H && col >= 0 && col < MAP_W) {
+    grid[row][col] = "@";
+  }
+
+  els.minimap.textContent = grid.map(r => r.join("")).join("\n");
+  els.minimapCoords.textContent = `${Math.round(nx * 100)},${Math.round(ny * 100)}`;
+}
+
+function blankMap() {
+  return Array.from({ length: MAP_H }, () => ".".repeat(MAP_W));
 }
 
 function setBarTier(fillEl, pct) {
@@ -49,7 +265,7 @@ function renderHeader(snap) {
   const p = snap.player || {};
   const t = snap.target;
 
-  // Zone label (name lookup falls back to hex hash).
+  // Zone label in the top header strip.
   const zoneLabel = z.name
     || ZONE_NAMES[z.hash]
     || (z.hash != null ? `zone#${z.hash.toString(16).toUpperCase().padStart(4, "0")}` : "—");
@@ -83,8 +299,6 @@ function renderHeader(snap) {
   }
 
   document.body.dataset.combat = snap.combat ? "1" : "0";
-
-  // Auto-derive severity if not pushed explicitly.
   setSeverity(deriveSeverity(snap));
 }
 
@@ -123,7 +337,7 @@ function handle(evt) {
   switch (evt.t) {
     case "snapshot":
       renderHeader(evt.data);
-      renderGrid(evt.data);
+      renderMinimap(evt.data);
       break;
     case "severity":
       setSeverity(evt.level);
@@ -160,6 +374,6 @@ function connect() {
   ws.onmessage = (m) => { try { handle(JSON.parse(m.data)); } catch (e) { console.error(e); } };
 }
 
-renderGrid({});
+renderMinimap({});
 renderHeader({ player: {}, zone: {} });
 connect();
