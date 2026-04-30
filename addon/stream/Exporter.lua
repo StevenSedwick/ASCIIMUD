@@ -19,14 +19,14 @@ ns.Exporter = Exporter
 local TICK_SECS = 30
 
 local function flushOnce()
-    if LoggingCombat then
-        pcall(LoggingCombat, false)
-        pcall(LoggingCombat, true)
-    end
-    if LoggingChat then
-        pcall(LoggingChat, false)
-        pcall(LoggingChat, true)
-    end
+    -- Same-frame off+on is collapsed by WoW into a no-op.
+    -- We need a real frame gap so the engine actually closes the file.
+    if LoggingCombat then pcall(LoggingCombat, false) end
+    if LoggingChat   then pcall(LoggingChat,   false) end
+    C_Timer.After(0.75, function()
+        if LoggingCombat then pcall(LoggingCombat, true) end
+        if LoggingChat   then pcall(LoggingChat,   true) end
+    end)
 end
 
 local function suppressLogToggleSpam(_, _, msg)
