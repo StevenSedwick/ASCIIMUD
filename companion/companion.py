@@ -193,8 +193,11 @@ async def tail(path: Path, on_line) -> None:
 async def tail_glob(directory: Path, pattern: str, on_line, label: str = "") -> None:
     """Tail the newest file matching ``pattern`` in ``directory``.
 
-    Auto-switches to a newer matching file when one appears (e.g. when WoW
-    starts a new session and creates ``WoWCombatLog-MMDDYY_HHMMSS.txt``).
+    Auto-switches to a newer matching file when one appears. The very first
+    file (at startup) is opened at EOF so we don't replay ancient sessions;
+    every *rotated-in* file is read from byte 0, because the tick-flush
+    addon closes one file and opens the next mid-session and the new file
+    contains only fresh data we want to ingest in full.
     """
     LOG.info("Tail-glob %s/%s (%s)", directory, pattern, label or "newest")
 
@@ -206,6 +209,7 @@ async def tail_glob(directory: Path, pattern: str, on_line, label: str = "") -> 
 
     current: Path | None = None
     f = None
+    is_first = True
     try:
         while True:
             latest = newest()
@@ -221,9 +225,11 @@ async def tail_glob(directory: Path, pattern: str, on_line, label: str = "") -> 
             if latest != current:
                 if f is not None:
                     f.close()
-                LOG.info("Tailing %s", latest)
+                LOG.info("Tailing %s%s", latest, " (from EOF)" if is_first else " (from start)")
                 f = latest.open("r", encoding="utf-8", errors="replace")
-                f.seek(0, 2)
+                if is_first:
+                    f.seek(0, 2)
+                    is_first = False
                 current = latest
             assert f is not None
             line = f.readline()
