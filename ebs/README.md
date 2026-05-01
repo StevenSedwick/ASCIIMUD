@@ -5,6 +5,12 @@ companion (`companion/companion.py`) HMAC-signs and POSTs game-state events
 to this Worker; a per-channel Durable Object (`ChannelRoom`) fans them out
 over WebSockets to viewers running the Twitch extension.
 
+## Live deployment
+
+- **Worker URL:** <https://asciimud-ebs.goreakis2.workers.dev>
+- **Health check:** <https://asciimud-ebs.goreakis2.workers.dev/healthz> → `{"ok": true}`
+- **KV namespace (`SECRETS`) id:** `6d8b18982e0a4ad4b1cc696d4fc0b52e` (already in `wrangler.toml`)
+
 ## Endpoints
 
 | Method | Path                  | Auth                             | Notes                                       |
@@ -24,11 +30,12 @@ cd ebs
 npm install
 
 # 1) KV namespace for per-channel HMAC secrets.
-npx wrangler kv:namespace create SECRETS
+#    (Already done for this deployment — id 6d8b18982e0a4ad4b1cc696d4fc0b52e.)
+npx wrangler kv namespace create SECRETS
 # Copy the printed `id` into wrangler.toml under [[kv_namespaces]].
 
 # 2) Provision a per-channel HMAC secret (hex string shared with companion).
-npx wrangler kv:key put --binding=SECRETS "secret:<channelId>" "<hexsecret>"
+npx wrangler kv key put --namespace-id <id> "secret:<channelId>" "<hexsecret>" --remote
 
 # 3) Twitch extension shared secret(s) (HS256, base64-encoded; from the
 #    Twitch Developer Console -> Extension Settings -> Client Configuration).

@@ -8,11 +8,11 @@ class_name = "ChannelRoom"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["ChannelRoom"]
+new_sqlite_classes = ["ChannelRoom"]
 
 [[kv_namespaces]]
 binding = "SECRETS"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "6d8b18982e0a4ad4b1cc696d4fc0b52e"
 
 [vars]
 # Comma-separated list of base64-encoded Twitch extension secrets (from the

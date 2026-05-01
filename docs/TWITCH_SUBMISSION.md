@@ -8,6 +8,7 @@ and live on Twitch. Do these in order.
 - A Twitch account with **Two-Factor Authentication** and a verified phone
   number — both are required to register an extension.
 - A deployed Cloudflare Worker EBS (see [`../ebs/README.md`](../ebs/README.md)).
+  - **This deployment:** `https://asciimud-ebs.goreakis2.workers.dev`
 - The companion app running locally and successfully POSTing to that Worker
   (i.e. `[twitch] ebs_url` set in `companion/config.toml`).
 

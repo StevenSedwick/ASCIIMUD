@@ -20,7 +20,7 @@ port = 8765
 # to viewers. Snapshots are coalesced to ~5 Hz (min_interval) before sending.
 # Leave ebs_url = "" (or omit the whole section) to disable forwarding —
 # local OBS overlay still works on ws://127.0.0.1:8765.
-ebs_url      = ""           # e.g. "https://asciimud-ebs.<your-subdomain>.workers.dev"
+ebs_url      = ""           # e.g. "https://asciimud-ebs.goreakis2.workers.dev"
 channel_id   = ""           # an opaque per-broadcaster id; must match the
                             # KV key set with `wrangler kv:key put SECRETS secret:<channel_id>`
 secret       = ""           # hex-encoded shared HMAC secret
