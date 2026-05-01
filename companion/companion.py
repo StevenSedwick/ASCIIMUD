@@ -67,6 +67,10 @@ class Coalescer:
         # key = (event, spell, src->dst) -> {count, total, last_ts}
         self.buckets: dict[tuple, dict[str, Any]] = {}
         self._task: asyncio.Task | None = None
+        # Most recent enemy the player damaged. Surfaced to the overlay so it
+        # can show "ENGAGED: <name>" alongside the QR-coded target HP bar.
+        self._engaged: str | None = None
+        self._engaged_last_ts: float = 0.0
 
     def start(self) -> None:
         self._task = asyncio.create_task(self._flusher())
@@ -94,7 +98,12 @@ class Coalescer:
     def add(self, evt: dict[str, Any]) -> None:
         event = evt["event"]
         if event == "UNIT_DIED":
-            # No bucketing — broadcast immediately.
+            # No bucketing — broadcast immediately. If the engaged target dies,
+            # clear it so the overlay drops the badge.
+            if self._engaged and evt.get("dst") == self._engaged:
+                self._engaged = None
+                asyncio.create_task(self.hub.broadcast(
+                    {"t": "engaged_target", "name": None}))
             asyncio.create_task(self.hub.broadcast(evt))
             return
         spell = evt.get("spell", "")
@@ -106,6 +115,12 @@ class Coalescer:
             direction = "in"
         else:
             direction = "other"
+        # Track who the player is currently engaging.
+        if direction == "out" and dst and dst != self._engaged:
+            self._engaged = dst
+            self._engaged_last_ts = time.monotonic()
+            asyncio.create_task(self.hub.broadcast(
+                {"t": "engaged_target", "name": dst}))
         key = (event, spell, direction)
         b = self.buckets.get(key)
         if b is None:
@@ -312,8 +327,15 @@ async def watch_screenshots(directory: Path, pattern: str, store: StateStore,
                 LOG.debug("Checksum mismatch on %s", p.name)
                 continue
             evt = to_event(d)
-            LOG.info("Snapshot tick=%d hp=%d%% mp=%d%% combat=%s zone=0x%X",
-                     d.tick, d.hp_pct, d.mp_pct, d.in_combat, d.zone_hash)
+            p = evt["data"]["player"]
+            tgt = evt["data"].get("target")
+            tgt_str = (f" tgt={tgt['hpPct']}%/{tgt['level']}lvl"
+                       if tgt else "")
+            LOG.info("Snap tick=%d %s %s lvl=%d hp=%d/%d mp=%d/%d "
+                     "zone=0x%X@%d,%d gold=%d%s",
+                     d.tick, p["class"], p["race"], p["level"],
+                     p["hp"], p["hpMax"], p["mp"], p["mpMax"],
+                     d.zone_hash, d.map_x, d.map_y, p["gold"], tgt_str)
             store.apply(evt)
             await hub.broadcast(evt)
             if ebs is not None:

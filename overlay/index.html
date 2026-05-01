@@ -7,10 +7,12 @@
 </head>
 <body data-combat="0" data-target="0">
   <div id="frame">
+
     <header id="header">
       <div id="zoneBlock">
         <span id="zoneLabel">ZONE</span>
         <span id="zone">—</span>
+        <span id="coords"></span>
       </div>
       <div id="severityBlock">
         <span id="severity" data-level="0">SEV 0</span>
@@ -18,26 +20,81 @@
     </header>
 
     <section id="vitals">
+      <!-- Player card -->
       <div class="vital player">
+        <div class="portrait" id="playerPortrait">
+          <pre id="portraitArt"></pre>
+          <div class="portrait-meta">
+            <div class="big-name" id="playerName">PLAYER</div>
+            <div class="sub" id="playerSub">— —</div>
+          </div>
+          <div class="lvl-badge" id="playerLevel">1</div>
+        </div>
+
         <div class="vital-row">
-          <span class="vital-label">PLAYER</span>
-          <span class="vital-pct" id="hpPct">— %</span>
+          <span class="vital-label">HEALTH</span>
+          <span class="vital-pct"><span id="hpVal">— / —</span> · <span id="hpPct">— %</span></span>
         </div>
         <div class="bar bar-hp"><div class="fill" id="hpFill"></div></div>
+
         <div class="vital-row">
-          <span class="vital-label dim">MANA</span>
-          <span class="vital-pct dim" id="mpPct">— %</span>
+          <span class="vital-label dim" id="powerLabel">MANA</span>
+          <span class="vital-pct dim"><span id="mpVal">— / —</span> · <span id="mpPct">— %</span></span>
         </div>
         <div class="bar bar-mp"><div class="fill" id="mpFill"></div></div>
+
+        <div class="vital-row tiny">
+          <span class="vital-label dim">XP</span>
+          <span class="vital-pct dim"><span id="xpPct">—</span></span>
+        </div>
+        <div class="bar bar-xp"><div class="fill" id="xpFill"></div></div>
+
+        <!-- Player cast bar (only shown while casting) -->
+        <div id="playerCast" class="cast-bar">
+          <div class="cast-label" id="playerCastSpell">—</div>
+          <div class="bar bar-cast"><div class="fill" id="playerCastFill"></div></div>
+        </div>
+
+        <div class="player-foot">
+          <span class="combo" id="comboPoints">●●●●●</span>
+          <span class="meta-tag" id="restingTag" hidden>ZZZ</span>
+          <span class="meta-tag" id="mountedTag" hidden>MOUNT</span>
+          <span class="meta-tag" id="pvpTag" hidden>PVP</span>
+          <span class="meta-tag" id="groupTag" hidden>GROUP</span>
+        </div>
+
+        <div class="player-stats">
+          <span><span class="dim">GOLD</span> <span id="goldVal">0</span></span>
+          <span><span class="dim">BAG</span> <span id="bagVal">—</span></span>
+          <span><span class="dim">DUR</span> <span id="durVal">—</span></span>
+        </div>
+
+        <div class="aura-strip" id="buffStrip" aria-label="buffs"></div>
       </div>
 
+      <!-- Target card -->
       <div class="vital target" id="targetCard">
+        <div class="portrait target-portrait">
+          <div class="portrait-meta">
+            <div class="big-name" id="targetName">NO TARGET</div>
+            <div class="sub" id="targetSub">—</div>
+          </div>
+          <div class="lvl-badge" id="targetLevel" data-cls="normal">—</div>
+        </div>
+
         <div class="vital-row">
-          <span class="vital-label" id="targetLabel">NO TARGET</span>
-          <span class="vital-pct" id="targetPct">— %</span>
+          <span class="vital-label" id="targetLabel">—</span>
+          <span class="vital-pct"><span id="targetVal">— / —</span> · <span id="targetPct">— %</span></span>
         </div>
         <div class="bar bar-target"><div class="fill" id="targetFill"></div></div>
-        <div class="target-meta" id="targetMeta">—</div>
+
+        <!-- Target cast bar -->
+        <div id="targetCast" class="cast-bar">
+          <div class="cast-label" id="targetCastSpell">—</div>
+          <div class="bar bar-cast"><div class="fill" id="targetCastFill"></div></div>
+        </div>
+
+        <div class="aura-strip" id="debuffStrip" aria-label="debuffs"></div>
       </div>
     </section>
 
