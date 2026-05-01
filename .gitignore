@@ -20,3 +20,8 @@ Thumbs.db
 # WoW
 WTF/
 Cache/
+
+# EBS (Cloudflare Workers)
+ebs/node_modules/
+ebs/.wrangler/
+ebs/dist/

@@ -1,51 +1,87 @@
-# ASCIIMUD EBS
+# ASCIIMUD EBS — Cloudflare Workers
 
-The Extension Backend Service. One container, two jobs:
+Extension Backend Service for the ASCIIMUD Twitch extension. The local
+companion (`companion/companion.py`) HMAC-signs and POSTs game-state events
+to this Worker; a per-channel Durable Object (`ChannelRoom`) fans them out
+over WebSockets to viewers running the Twitch extension.
 
-1. **Ingest** the companion's event stream from your home PC over an
-   authenticated outbound WebSocket (`/ingest`).
-2. **Fan out** to viewers two ways:
-   - **PubSub broadcast** — 1 Hz, ≤5KB digest, reaches every viewer of the
-     channel for free.
-   - **Per-viewer WSS** — full-fidelity stream for opted-in viewers
-     (`/viewer`), authenticated with the Twitch helper JWT.
+## Endpoints
 
-## Local dev
+| Method | Path                  | Auth                             | Notes                                       |
+| ------ | --------------------- | -------------------------------- | ------------------------------------------- |
+| GET    | `/healthz`            | —                                | `{"ok": true}`                              |
+| POST   | `/ingest/:channelId`  | `Authorization: HMAC-SHA256 <hex>` over raw body | Companion → EBS event upload. 5 ev/s, burst 10. |
+| GET    | `/ws/:channelId`      | `?jwt=<twitch-ext-jwt>` (HS256)  | Viewer feed. JWT `channel_id` must match.   |
 
-```powershell
-cd ebs
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-copy config.example.toml config.toml
-# fill in: ingest.shared_secret, twitch.client_id,
-#          twitch.extension_secret, twitch.owner_user_id
-uvicorn server:app --host 0.0.0.0 --port 8080
-```
+On WS connect the room replays `lastSnapshot`, then a `spell_meta_bulk`
+of all known spells, then the latest `action_bar` layout, before streaming
+live events.
 
-Health check: `GET /healthz`.
-
-## Deploy
+## Quickstart
 
 ```bash
-docker build -t asciimud-ebs .
-docker run -p 8080:8080 -v $(pwd)/config.toml:/app/config.toml asciimud-ebs
+cd ebs
+npm install
+
+# 1) KV namespace for per-channel HMAC secrets.
+npx wrangler kv:namespace create SECRETS
+# Copy the printed `id` into wrangler.toml under [[kv_namespaces]].
+
+# 2) Provision a per-channel HMAC secret (hex string shared with companion).
+npx wrangler kv:key put --binding=SECRETS "secret:<channelId>" "<hexsecret>"
+
+# 3) Twitch extension shared secret(s) (HS256, base64-encoded; from the
+#    Twitch Developer Console -> Extension Settings -> Client Configuration).
+#    Pass a comma-separated list to support secret rotation. Stored as a
+#    Worker secret (overrides the empty [vars] default).
+npx wrangler secret put TWITCH_EXT_SECRETS
+
+# 4) Local dev (no Twitch creds needed for /healthz and /ingest mock).
+npm run dev   # http://127.0.0.1:8787
+
+# 5) Deploy.
+npm run deploy
 ```
 
-Tested deploy targets: Fly.io, Render, Railway. Any container host with WSS
-ingress and a stable hostname works.
+## Type checking
 
-## Twitch dashboard wiring
+```bash
+npm run typecheck
+```
 
-In the Extension dashboard → **Asset Hosting** and **Capabilities**:
+## Auth details
 
-- **Allowed URLs** must include your EBS hostname.
-- **Required broadcaster configuration** = on (so config.html runs first).
-- **EBS URL** is informational; the frontend connects directly via WSS.
+### Ingest HMAC
 
-## Security notes
+```
+sig = hex(HMAC_SHA256(secret_bytes, raw_request_body))
+Authorization: HMAC-SHA256 <sig>
+```
 
-- `ingest.shared_secret` protects `/ingest`. Treat it like a database password.
-- Never expose `extension_secret` to the browser; only the EBS uses it.
-- The viewer JWT carries `opaque_user_id` only by default; viewers must opt in
-  to share their real `user_id`.
+The secret stored in KV at `secret:<channelId>` must be a hex string; the
+companion uses the same hex bytes. Mismatched / missing → `401`.
+
+### Viewer JWT
+
+The Twitch extension SDK provides a signed JWT via `Twitch.ext.onAuthorized`.
+The Worker verifies it with HS256 against `TWITCH_EXT_SECRETS` (one or more
+base64-encoded shared secrets from the Twitch developer console). Multiple
+secrets allow rotation: the JWT validates if **any** active secret signs it.
+The `channel_id` claim must match the URL segment.
+
+## Layout
+
+```
+ebs/
+  wrangler.toml
+  package.json
+  tsconfig.json
+  src/
+    index.ts          # router; forwards to ChannelRoom DO
+    channel_room.ts   # Durable Object: state + ingest + WS fanout
+    hmac.ts           # SubtleCrypto HMAC-SHA256 verify
+    jwt.ts            # jose HS256 verify (Twitch ext JWT)
+```
+
+This is Phase 3A only — the companion-side push client and the Twitch
+extension viewer panel arrive in 3B/3C.

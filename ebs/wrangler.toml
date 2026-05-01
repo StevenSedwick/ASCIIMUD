@@ -1,0 +1,22 @@
+name = "asciimud-ebs"
+main = "src/index.ts"
+compatibility_date = "2026-04-30"
+
+[[durable_objects.bindings]]
+name = "CHANNEL_ROOM"
+class_name = "ChannelRoom"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["ChannelRoom"]
+
+[[kv_namespaces]]
+binding = "SECRETS"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+[vars]
+# Comma-separated list of base64-encoded Twitch extension secrets (from the
+# Twitch Developer Console -> Extension Settings -> Client Configuration).
+# Multiple values support secret rotation. Override via:
+#   npx wrangler secret put TWITCH_EXT_SECRETS
+TWITCH_EXT_SECRETS = ""
