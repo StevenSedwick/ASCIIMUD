@@ -32,8 +32,7 @@ if (Test-Path "assets") {
 
 Push-Location $staging
 try {
-  $items = Get-ChildItem -Force | ForEach-Object { $_.Name }
-  Compress-Archive -Path $items -DestinationPath $zipPath -Force
+  Compress-Archive -Path "$staging\*" -DestinationPath $zipPath -Force
 } finally {
   Pop-Location
 }

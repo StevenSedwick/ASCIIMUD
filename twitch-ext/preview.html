@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ASCIIMUD — Local Preview</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="viewer.css" />
+  <style>
+    /* Fake stream backdrop so we can see the widget against "game footage" */
+    html, body { margin: 0; height: 100%; background: #1a1a1a; }
+    body::before {
+      content: ""; position: fixed; inset: 0;
+      background:
+        radial-gradient(circle at 30% 40%, #3a4a2a 0%, transparent 50%),
+        radial-gradient(circle at 70% 60%, #2a3a4a 0%, transparent 50%),
+        repeating-linear-gradient(45deg, #222 0 4px, #1a1a1a 4px 8px);
+      opacity: 0.6;
+      z-index: 0;
+    }
+    /* Stub Twitch.ext so viewer.js does not crash */
+  </style>
+
+  <!-- Stub Twitch helper before any scripts touch it -->
+  <script>
+    window.Twitch = { ext: {
+      onAuthorized: function(cb){ /* noop — we drive data manually */ },
+      configuration: { broadcaster: null, onChanged: function(cb){} },
+      listen: function(){},
+      onContext: function(){},
+    }};
+    window.ASCIIMUD_DEFER_CONNECT = true;
+  </script>
+</head>
+<body data-combat="0" data-target="0" class="tx-collapsed">
+
+  <div id="widget">
+    <div id="asciiNoise" aria-hidden="true"></div>
+    <div id="widgetHeader">
+      <span id="widgetTitle">ASCIIMUD</span>
+      <span id="widgetChevron">▼</span>
+    </div>
+    <div id="widgetBody">
+      <div id="compactSection">
+        <div class="w-row"><span class="w-label">ZONE:</span><div class="w-content">
+          <span id="zone" class="w-val c-zone">—</span>
+          <span id="coords" class="w-val" style="color:#555;font-size:11px;margin-left:4px"></span>
+        </div></div>
+        <div class="w-row"><span class="w-label">HEALTH:</span><div class="w-content">
+          <span id="hpBar" class="ascii-bar c-hp">██████████</span>
+          <span id="hpPct" class="bar-pct c-hp">100%</span>
+          <span id="hpVal" style="display:none">—</span>
+        </div></div>
+        <div class="w-row"><span class="w-label" id="powerLabel">MANA:</span><div class="w-content">
+          <span id="mpBar" class="ascii-bar c-mp">██████████</span>
+          <span id="mpPct" class="bar-pct c-mp">100%</span>
+          <span id="mpVal" style="display:none">—</span>
+        </div></div>
+        <div class="w-row"><span class="w-label">TARGET:</span><div class="w-content">
+          <span id="targetName" class="w-val c-target">NO TARGET</span>
+        </div></div>
+        <div class="w-row"><span class="w-label">SEV:</span><div class="w-content">
+          <span id="severity" data-level="0">█████</span>
+        </div></div>
+      </div>
+
+      <div id="expandedSection">
+        <div class="w-divider"></div>
+        <div class="w-row"><span class="w-label">PLAYER:</span><div class="w-content">
+          <span id="playerName" class="w-val" style="color:#e8e8e8">—</span>
+          <span id="playerSub"  style="color:#666;font-size:11px">—</span>
+          <span id="playerLevel" style="color:#facc15;font-size:12px;margin-left:4px">—</span>
+        </div></div>
+        <div class="w-row"><span class="w-label">XP:</span><div class="w-content">
+          <span id="xpBar" class="ascii-bar c-xp">██████████</span>
+          <span id="xpPct" class="bar-pct c-xp">—</span>
+        </div></div>
+        <div class="w-row"><span class="w-label">TARGET HP:</span><div class="w-content">
+          <span id="targetBar" class="ascii-bar c-target">██████████</span>
+          <span id="targetPct" class="bar-pct c-target">—%</span>
+          <span id="targetVal" style="display:none">—</span>
+        </div></div>
+        <div class="w-sub" id="targetSub" style="margin-left:96px;margin-bottom:6px">—</div>
+        <div class="w-row" id="playerCast"><span class="w-label">CASTING:</span><div class="w-content">
+          <span id="playerCastBar" class="ascii-bar c-cast">──────────</span>
+          <span id="playerCastSpell" style="color:#aaa;font-size:11px">—</span>
+        </div></div>
+        <div class="player-stats">
+          <span><span style="color:#666">GOLD</span> <span id="goldVal">0</span></span>
+          <span><span style="color:#666">BAG</span>  <span id="bagVal">—</span></span>
+          <span><span style="color:#666">DUR</span>  <span id="durVal">—</span></span>
+        </div>
+        <span id="portraitIcon"    style="display:none"></span>
+        <div  id="xpFill"          style="display:none"></div>
+        <div  id="hpFill"          style="display:none"></div>
+        <div  id="mpFill"          style="display:none"></div>
+        <div  id="targetFill"      style="display:none"></div>
+        <span id="targetLabel"     style="display:none"></span>
+        <span id="targetLevel"     style="display:none"></span>
+        <span id="comboPoints"     style="display:none"></span>
+        <span id="restingTag"      style="display:none"></span>
+        <span id="mountedTag"      style="display:none"></span>
+        <span id="pvpTag"          style="display:none"></span>
+        <span id="groupTag"        style="display:none"></span>
+        <div  id="buffStrip"       style="display:none"></div>
+        <div  id="debuffStrip"     style="display:none"></div>
+        <div  id="targetCast"      style="display:none">
+          <span id="targetCastSpell"></span><div id="targetCastFill"></div>
+        </div>
+        <div  id="playerCastFill"  style="display:none"></div>
+        <div  id="minimapPanel"    style="display:none">
+          <div id="minimapHeader">
+            <span id="minimapZoneName"></span>
+            <span id="minimapCoords"></span>
+          </div>
+          <pre id="minimap"></pre>
+        </div>
+        <section id="feed" style="display:none"></section>
+      </div>
+
+      <footer id="status">PREVIEW MODE</footer>
+    </div>
+  </div>
+
+  <!-- Hint overlay -->
+  <div style="position:fixed;top:8px;left:8px;color:#888;font:11px monospace;z-index:1000;pointer-events:none;">
+    LOCAL PREVIEW — drag widget · click header to expand · mock data updating every 2s
+  </div>
+
+  <script src="icons.js"></script>
+  <script src="app.js"></script>
+  <script src="viewer.js"></script>
+
+  <!-- Drive mock snapshots -->
+  <script>
+    (function () {
+      const SCENARIOS = [
+        { hp: 1.0, mp: 0.85, target: null,           sev: 0, casting: null },
+        { hp: 0.92, mp: 0.62, target: "Defias Thug", sev: 2, casting: { spell: "Frostbolt", pct: 0.45 } },
+        { hp: 0.55, mp: 0.30, target: "Defias Thug", sev: 4, casting: { spell: "Frostbolt", pct: 0.80 } },
+        { hp: 0.20, mp: 0.10, target: "Defias Thug", sev: 5, casting: null },
+        { hp: 0.78, mp: 0.55, target: null,          sev: 1, casting: null },
+      ];
+      let i = 0;
+      function tick() {
+        const s = SCENARIOS[i % SCENARIOS.length]; i++;
+        const snap = {
+          t: "snapshot",
+          data: {
+            zone: { name: "Elwynn Forest", subzone: "Goldshire", x: 42 + i, y: 67 - i },
+            severity: s.sev,
+            player: {
+              name: "Testwick", class: "MAGE", level: 24,
+              hp: Math.round(360 * s.hp), hpMax: 360,
+              mp: Math.round(200 * s.mp), mpMax: 200,
+              powerType: "MANA",
+              xp: 4200 + i * 30, xpMax: 8800,
+              gold: 12345, bagFree: 14, bagTotal: 16, durabilityPct: 0.92,
+              casting: s.casting ? { name: s.casting.spell, pct: s.casting.pct, castMs: 2500 } : null,
+            },
+            target: s.target ? {
+              name: s.target, level: 22, hp: Math.round(100 * (1 - s.sev * 0.15)), hpMax: 100,
+              classification: "normal", reaction: "hostile",
+            } : null,
+            buffs: [], debuffs: [],
+          },
+        };
+        try {
+          if (typeof handle === "function") handle(snap);
+          else if (window.handle) window.handle(snap);
+        } catch (e) { console.error(e); }
+      }
+      // app.js uses module-scope `handle` — expose via WS-shaped event after small delay
+      // Easier: directly invoke via an injected global wrapper.
+      window.__previewTick = tick;
+      setTimeout(function start() {
+        // app.js's `handle` is not global; simulate by dispatching to a wrapper WS
+        // Instead, monkey-patch by re-evaluating: since handle isn't global,
+        // we drive via a fake WebSocket already opened by connect(). Simpler:
+        // call window.ASCIIMUD_connect with a stubbed WebSocket.
+        startMockWs();
+      }, 100);
+
+      function startMockWs() {
+        const RealWS = window.WebSocket;
+        const queue = [];
+        let listener = null;
+        window.WebSocket = function MockWS(url) {
+          const me = {
+            url,
+            send: function () {},
+            close: function () {},
+            addEventListener: function () {},
+          };
+          setTimeout(() => { if (me.onopen) me.onopen({}); }, 10);
+          // Push first snapshot then on interval
+          function deliver() {
+            const s = SCENARIOS[i % SCENARIOS.length]; i++;
+            const snap = {
+              t: "snapshot",
+              data: {
+                zone: { name: "Elwynn Forest", subzone: "Goldshire", x: 42, y: 67 },
+                severity: s.sev,
+                player: {
+                  name: "Testwick", class: "MAGE", level: 24,
+                  hp: Math.round(360 * s.hp), hpMax: 360,
+                  mp: Math.round(200 * s.mp), mpMax: 200,
+                  powerType: "MANA",
+                  xp: 4200 + i * 30, xpMax: 8800,
+                  gold: 12345, bagFree: 14, bagTotal: 16, durabilityPct: 0.92,
+                  casting: s.casting ? { name: s.casting.spell, pct: s.casting.pct, castMs: 2500 } : null,
+                },
+                target: s.target ? {
+                  name: s.target, level: 22,
+                  hp: Math.round(100 * (1 - s.sev * 0.15)), hpMax: 100,
+                  classification: "normal", reaction: "hostile",
+                } : null,
+                buffs: [], debuffs: [],
+              },
+            };
+            if (me.onmessage) me.onmessage({ data: JSON.stringify(snap) });
+          }
+          setTimeout(deliver, 50);
+          setInterval(deliver, 2000);
+          return me;
+        };
+        // Now trigger the connect path
+        if (typeof window.ASCIIMUD_connect === "function") window.ASCIIMUD_connect();
+      }
+    })();
+  </script>
+</body>
+</html>

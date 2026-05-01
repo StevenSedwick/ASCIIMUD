@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ASCIIMUD — Live (local companion)</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="viewer.css" />
+  <style>
+    html, body { margin: 0; height: 100%; background: #1a1a1a; }
+    body::before {
+      content: ""; position: fixed; inset: 0;
+      background:
+        radial-gradient(circle at 30% 40%, #3a4a2a 0%, transparent 50%),
+        radial-gradient(circle at 70% 60%, #2a3a4a 0%, transparent 50%),
+        repeating-linear-gradient(45deg, #222 0 4px, #1a1a1a 4px 8px);
+      opacity: 0.6;
+      z-index: 0;
+    }
+  </style>
+  <!-- Stub Twitch helper so viewer.js can boot -->
+  <script>
+    window.Twitch = { ext: {
+      onAuthorized: function(cb){ /* noop */ },
+      configuration: { broadcaster: null, onChanged: function(){} },
+      listen: function(){}, onContext: function(){},
+    }};
+    // Tell app.js where to connect (overrides default ws://127.0.0.1:8765/ws)
+    window.ASCIIMUD_WS_URL = "ws://127.0.0.1:8765/ws";
+    // Don't auto-connect on app.js load; viewer.js triggers it via ASCIIMUD_connect()
+    window.ASCIIMUD_DEFER_CONNECT = false;
+  </script>
+</head>
+<body data-combat="0" data-target="0" class="tx-collapsed">
+
+  <div id="widget">
+    <div id="asciiNoise" aria-hidden="true"></div>
+    <div id="widgetHeader">
+      <span id="widgetTitle">ASCIIMUD · LIVE</span>
+      <span id="widgetChevron">▼</span>
+    </div>
+    <div id="widgetBody">
+      <div id="compactSection">
+        <div class="w-row"><span class="w-label">ZONE:</span><div class="w-content">
+          <span id="zone" class="w-val c-zone">—</span>
+          <span id="coords" class="w-val" style="color:#555;font-size:11px;margin-left:4px"></span>
+        </div></div>
+        <div class="w-row"><span class="w-label">HEALTH:</span><div class="w-content">
+          <span id="hpBar" class="ascii-bar c-hp">██████████</span>
+          <span id="hpPct" class="bar-pct c-hp">100%</span>
+          <span id="hpVal" style="display:none">—</span>
+        </div></div>
+        <div class="w-row"><span class="w-label" id="powerLabel">MANA:</span><div class="w-content">
+          <span id="mpBar" class="ascii-bar c-mp">██████████</span>
+          <span id="mpPct" class="bar-pct c-mp">100%</span>
+          <span id="mpVal" style="display:none">—</span>
+        </div></div>
+        <div class="w-row"><span class="w-label">TARGET:</span><div class="w-content">
+          <span id="targetName" class="w-val c-target">NO TARGET</span>
+        </div></div>
+        <div class="w-row"><span class="w-label">SEV:</span><div class="w-content">
+          <span id="severity" data-level="0">█████</span>
+        </div></div>
+      </div>
+
+      <div id="expandedSection">
+        <div class="w-divider"></div>
+        <div class="w-row"><span class="w-label">PLAYER:</span><div class="w-content">
+          <span id="playerName" class="w-val" style="color:#e8e8e8">—</span>
+          <span id="playerSub"  style="color:#666;font-size:11px">—</span>
+          <span id="playerLevel" style="color:#facc15;font-size:12px;margin-left:4px">—</span>
+        </div></div>
+        <div class="w-row"><span class="w-label">XP:</span><div class="w-content">
+          <span id="xpBar" class="ascii-bar c-xp">██████████</span>
+          <span id="xpPct" class="bar-pct c-xp">—</span>
+        </div></div>
+        <div class="w-row"><span class="w-label">TARGET HP:</span><div class="w-content">
+          <span id="targetBar" class="ascii-bar c-target">██████████</span>
+          <span id="targetPct" class="bar-pct c-target">—%</span>
+          <span id="targetVal" style="display:none">—</span>
+        </div></div>
+        <div class="w-sub" id="targetSub" style="margin-left:96px;margin-bottom:6px">—</div>
+        <div class="w-row" id="playerCast"><span class="w-label">CASTING:</span><div class="w-content">
+          <span id="playerCastBar" class="ascii-bar c-cast">──────────</span>
+          <span id="playerCastSpell" style="color:#aaa;font-size:11px">—</span>
+        </div></div>
+        <div class="player-stats">
+          <span><span style="color:#666">GOLD</span> <span id="goldVal">0</span></span>
+          <span><span style="color:#666">BAG</span>  <span id="bagVal">—</span></span>
+          <span><span style="color:#666">DUR</span>  <span id="durVal">—</span></span>
+        </div>
+        <span id="portraitIcon"    style="display:none"></span>
+        <div  id="xpFill"          style="display:none"></div>
+        <div  id="hpFill"          style="display:none"></div>
+        <div  id="mpFill"          style="display:none"></div>
+        <div  id="targetFill"      style="display:none"></div>
+        <span id="targetLabel"     style="display:none"></span>
+        <span id="targetLevel"     style="display:none"></span>
+        <span id="comboPoints"     style="display:none"></span>
+        <span id="restingTag"      style="display:none"></span>
+        <span id="mountedTag"      style="display:none"></span>
+        <span id="pvpTag"          style="display:none"></span>
+        <span id="groupTag"        style="display:none"></span>
+        <div  id="buffStrip"       style="display:none"></div>
+        <div  id="debuffStrip"     style="display:none"></div>
+        <div  id="targetCast"      style="display:none">
+          <span id="targetCastSpell"></span><div id="targetCastFill"></div>
+        </div>
+        <div  id="playerCastFill"  style="display:none"></div>
+        <div  id="minimapPanel"    style="display:none">
+          <div id="minimapHeader">
+            <span id="minimapZoneName"></span>
+            <span id="minimapCoords"></span>
+          </div>
+          <pre id="minimap"></pre>
+        </div>
+        <section id="feed" style="display:none"></section>
+      </div>
+
+      <footer id="status">connecting…</footer>
+    </div>
+  </div>
+
+  <div style="position:fixed;top:8px;left:8px;color:#888;font:11px monospace;z-index:1000;pointer-events:none;">
+    LIVE — connected to local companion (ws://127.0.0.1:8765/ws)
+  </div>
+
+  <script src="icons.js"></script>
+  <script src="app.js"></script>
+  <script src="viewer.js"></script>
+</body>
+</html>
