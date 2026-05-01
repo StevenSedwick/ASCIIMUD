@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ASCIIMUD — Broadcaster Config</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
+  <link rel="stylesheet" href="config.css" />
+</head>
+<body>
+  <main id="cfg">
+    <h1>ASCIIMUD <span class="dim">— configuration</span></h1>
+
+    <p class="lede">
+      Point the Twitch extension at your Cloudflare Worker EBS. The companion
+      app on your PC HMAC-signs every snapshot and POSTs to that URL; viewers'
+      browsers connect over WebSocket and receive a fan-out of the same data.
+    </p>
+
+    <label for="ebsUrl">EBS URL</label>
+    <input id="ebsUrl" type="url" placeholder="https://asciimud-ebs.&lt;your-subdomain&gt;.workers.dev" />
+    <small class="hint">
+      No trailing slash. The viewer will connect to
+      <code>wss://&lt;host&gt;/ws/&lt;your-channel-id&gt;</code> automatically.
+    </small>
+
+    <div class="row">
+      <button id="saveBtn" type="button">Save</button>
+      <span id="saveStatus" class="dim"></span>
+    </div>
+
+    <hr />
+
+    <details>
+      <summary>HMAC secret rotation (advanced)</summary>
+      <p class="dim">
+        The HMAC shared secret is configured directly in your Worker
+        (<code>wrangler kv:key put SECRETS secret:&lt;channel_id&gt; &lt;hex&gt;</code>)
+        and in your local <code>companion/config.toml</code>'s
+        <code>[twitch]</code> section. Rotating it is a two-step deploy; this
+        panel does not store it for security reasons.
+      </p>
+    </details>
+  </main>
+
+  <script src="config.js"></script>
+</body>
+</html>

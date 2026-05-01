@@ -25,3 +25,5 @@ Cache/
 ebs/node_modules/
 ebs/.wrangler/
 ebs/dist/
+twitch-ext/dist/
+
