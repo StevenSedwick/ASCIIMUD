@@ -491,7 +491,7 @@ async def main() -> None:
         "screenshots_dir",
         str(log_path.parent.parent / "Screenshots")
     )).expanduser()
-    screenshots_pattern = cfg["wow"].get("screenshots_pattern", "WoWScrnShot_*.jpg")
+    screenshots_pattern = cfg["wow"].get("screenshots_pattern", "WoWScrnShot_*")
     host = cfg["server"].get("host", "127.0.0.1")
     port = int(cfg["server"].get("port", 8765))
 
