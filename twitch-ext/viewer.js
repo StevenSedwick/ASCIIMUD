@@ -1,32 +1,148 @@
 // ASCIIMUD — Twitch extension viewer bootstrap.
 //
 // Resolves the EBS WebSocket URL from broadcaster config (set in config.html)
-// and connects after Twitch.ext.onAuthorized fires. Provides a collapse/expand
-// toggle button so viewers can hide the overlay if they prefer.
+// and connects after Twitch.ext.onAuthorized fires. The widget card supports
+// compact/expanded toggle (click header) and free drag-to-reposition.
 
 (function () {
   "use strict";
 
   const TOGGLE_KEY = "asciimud:expanded";
-  const body = document.body;
-  const toggleBtn = document.getElementById("txToggle");
+  const POS_X_KEY  = "asciimud:pos:x";
+  const POS_Y_KEY  = "asciimud:pos:y";
 
-  // ---- collapse / expand ----------------------------------------------------
-  function applyCollapsed(collapsed) {
-    body.classList.toggle("tx-collapsed", collapsed);
-    body.classList.toggle("tx-expanded", !collapsed);
-    try { localStorage.setItem(TOGGLE_KEY, collapsed ? "0" : "1"); } catch (_) {}
+  const body   = document.body;
+  const widget = document.getElementById("widget");
+  const header = document.getElementById("widgetHeader");
+  const chevron = document.getElementById("widgetChevron");
+
+  // ── Collapse / expand ──────────────────────────────────────────────────────
+  function applyExpanded(expanded) {
+    body.classList.toggle("tx-expanded",  expanded);
+    body.classList.toggle("tx-collapsed", !expanded);
+    chevron.textContent = expanded ? "▲" : "▼";
+    try { localStorage.setItem(TOGGLE_KEY, expanded ? "1" : "0"); } catch (_) {}
   }
 
+  // Restore saved preference; default collapsed
   let initialExpanded = false;
   try { initialExpanded = localStorage.getItem(TOGGLE_KEY) === "1"; } catch (_) {}
-  applyCollapsed(!initialExpanded);
+  applyExpanded(initialExpanded);
 
-  toggleBtn.addEventListener("click", function () {
-    applyCollapsed(!body.classList.contains("tx-collapsed"));
+  // ── Drag to reposition ─────────────────────────────────────────────────────
+  let dragging   = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let dragOrigL  = 0;
+  let dragOrigT  = 0;
+
+  function getWidgetRect() {
+    return widget.getBoundingClientRect();
+  }
+
+  function clampPos(x, y) {
+    const w   = widget.offsetWidth  || 280;
+    const h   = widget.offsetHeight || 200;
+    const vw  = window.innerWidth;
+    const vh  = window.innerHeight;
+    return {
+      x: Math.max(0, Math.min(x, vw - w)),
+      y: Math.max(0, Math.min(y, vh - h)),
+    };
+  }
+
+  function setWidgetPos(x, y) {
+    widget.style.left   = x + "px";
+    widget.style.top    = y + "px";
+    widget.style.bottom = "auto";
+    widget.style.right  = "auto";
+  }
+
+  function savePos() {
+    const r = getWidgetRect();
+    try {
+      localStorage.setItem(POS_X_KEY, String(Math.round(r.left)));
+      localStorage.setItem(POS_Y_KEY, String(Math.round(r.top)));
+    } catch (_) {}
+  }
+
+  // Restore saved position (if any); otherwise CSS bottom/left defaults take effect
+  (function restorePos() {
+    try {
+      const sx = localStorage.getItem(POS_X_KEY);
+      const sy = localStorage.getItem(POS_Y_KEY);
+      if (sx !== null && sy !== null) {
+        const clamped = clampPos(parseInt(sx, 10), parseInt(sy, 10));
+        setWidgetPos(clamped.x, clamped.y);
+      }
+    } catch (_) {}
+  })();
+
+  header.addEventListener("mousedown", function (e) {
+    // Don't start drag on right-click
+    if (e.button !== 0) return;
+    e.preventDefault();
+
+    dragging   = true;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+
+    const r  = getWidgetRect();
+    dragOrigL = r.left;
+    dragOrigT = r.top;
+
+    header.style.cursor = "grabbing";
+    document.body.style.userSelect = "none";
   });
 
-  // ---- Twitch helper --------------------------------------------------------
+  document.addEventListener("mousemove", function (e) {
+    if (!dragging) return;
+    const dx = e.clientX - dragStartX;
+    const dy = e.clientY - dragStartY;
+    const clamped = clampPos(dragOrigL + dx, dragOrigT + dy);
+    setWidgetPos(clamped.x, clamped.y);
+  });
+
+  document.addEventListener("mouseup", function (e) {
+    if (!dragging) return;
+    dragging = false;
+    header.style.cursor = "";
+    document.body.style.userSelect = "";
+
+    // Only toggle expand if mouse barely moved (click, not drag)
+    const dx = Math.abs(e.clientX - dragStartX);
+    const dy = Math.abs(e.clientY - dragStartY);
+    if (dx < 4 && dy < 4) {
+      applyExpanded(body.classList.contains("tx-collapsed"));
+    } else {
+      savePos();
+    }
+  });
+
+  // ── ASCII noise background ─────────────────────────────────────────────────
+  const noiseEl = document.getElementById("asciiNoise");
+  const NOISE_CHARS = "!@#$%^&*()_+-=[]{}|;:,.<>?/\\~`0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz░▒▓█▄▀■□▪▫";
+
+  function randomChar() {
+    return NOISE_CHARS[Math.floor(Math.random() * NOISE_CHARS.length)];
+  }
+
+  function refreshNoise() {
+    if (!noiseEl) return;
+    const cols = Math.floor(280 / 6.5);   // ~43 chars wide at 10px Consolas
+    const rows = Math.floor((widget.offsetHeight || 220) / 12);
+    let text = "";
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) text += randomChar();
+      text += "\n";
+    }
+    noiseEl.textContent = text;
+  }
+
+  refreshNoise();
+  setInterval(refreshNoise, 2000);
+
+  // ── Twitch helper ──────────────────────────────────────────────────────────
   if (typeof Twitch === "undefined" || !Twitch.ext) {
     console.warn("[ASCIIMUD] Twitch helper not loaded — running in fallback dev mode.");
     window.ASCIIMUD_WS_URL = window.ASCIIMUD_WS_URL || "ws://127.0.0.1:8765/ws";

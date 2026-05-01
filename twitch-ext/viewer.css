@@ -1,71 +1,261 @@
-/* ASCIIMUD Twitch extension — viewer-only chrome.
-   Layered on top of style.css. The main overlay sits inside #frame; in
-   collapsed mode the frame fades out and only #txToggle is visible. */
+/* ASCIIMUD Twitch extension — compact draggable widget overlay.
+   Layered on top of style.css. The widget floats over the player;
+   everything outside the card is pointer-events:none. */
 
+/* ── Reset / iframe base ── */
 html, body {
-  background: transparent !important;  /* extension iframe is transparent */
+  background: transparent !important;
   margin: 0;
   width: 100%;
   height: 100%;
   overflow: hidden;
-  pointer-events: none;                /* let clicks pass through to video */
-}
-
-#frame {
-  pointer-events: auto;                /* but interactive when expanded */
-  transition: opacity 220ms ease, transform 220ms ease;
-  transform-origin: top left;
-}
-
-body.tx-collapsed #frame {
-  opacity: 0;
   pointer-events: none;
-  transform: scale(0.92);
 }
 
-body.tx-expanded #frame {
+/* ── Widget card ── */
+#widget {
+  position: fixed;
+  bottom: 12px;
+  left: 12px;
+  width: 280px;
+  pointer-events: auto;
+  z-index: 9999;
+  font-family: "Consolas", "Menlo", "Courier New", monospace;
+  font-size: 12px;
+  color: var(--text);
+  background: linear-gradient(180deg, rgba(18,15,8,0.96) 0%, rgba(6,7,10,0.97) 100%);
+  border: 1px solid var(--gold);
+  border-radius: 4px;
+  box-shadow: 0 6px 28px rgba(0,0,0,0.75),
+              0 0 24px rgba(212,175,55,0.08) inset;
+  overflow: hidden; /* clips asciiNoise */
+}
+
+/* Gold corner brackets matching .vital style */
+#widget::before, #widget::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--gold);
+  pointer-events: none;
+  z-index: 2;
+}
+#widget::before { top: -2px;    left: -2px;    border-right: none; border-bottom: none; }
+#widget::after  { bottom: -2px; right: -2px;   border-left: none;  border-top: none;    }
+
+/* ── ASCII noise background ── */
+#asciiNoise {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  font-family: "Consolas", monospace;
+  font-size: 10px;
+  line-height: 1.15;
+  color: var(--gold);
+  opacity: 0.09;
+  z-index: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  padding: 2px 4px;
+  user-select: none;
+}
+
+/* ── Header / drag handle ── */
+#widgetHeader {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 10px 6px;
+  background: linear-gradient(180deg, rgba(32,26,10,0.98) 0%, rgba(18,15,8,0.98) 100%);
+  border-bottom: 1px solid var(--gold-dim);
+  cursor: grab;
+  user-select: none;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+}
+#widgetHeader:active { cursor: grabbing; }
+
+#widgetTitle {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  color: var(--gold);
+  text-shadow: 0 0 10px rgba(212,175,55,0.55);
+}
+
+#widgetChevron {
+  font-size: 10px;
+  color: var(--gold-dim);
+  transition: transform 200ms ease;
+  line-height: 1;
+}
+
+/* ── Widget body ── */
+#widgetBody {
+  position: relative;
+  z-index: 1;
+  padding: 8px 10px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ── Compact rows ── */
+.w-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+.w-row.tiny { font-size: 10px; margin-top: 2px; }
+
+.w-label {
+  color: var(--gold-dim);
+  letter-spacing: 0.2em;
+  font-size: 10px;
+  min-width: 46px;
+  flex-shrink: 0;
+}
+.w-val {
+  color: var(--gold);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 170px;
+}
+.w-pct {
+  color: var(--text);
+  font-size: 11px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.w-coords {
+  color: var(--dim);
+  font-size: 10px;
+  margin-left: auto;
+}
+.w-sub {
+  font-size: 10px;
+  color: var(--dim);
+  letter-spacing: 0.1em;
+  margin-top: 2px;
+  padding-left: 2px;
+}
+.w-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-dim), transparent);
+  margin: 6px 0 4px;
+  opacity: 0.5;
+}
+.w-lvl { margin-left: auto; flex-shrink: 0; }
+
+/* Severity in compact */
+.w-sev {
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  transition: color 0.3s, text-shadow 0.3s;
+}
+#severity[data-level="0"] .w-sev, .w-sev { color: var(--dim); }
+#severity[data-level="1"] { color: #c2b280; }
+#severity[data-level="2"] { color: #e0a838; }
+#severity[data-level="3"] { color: #f97316; text-shadow: 0 0 8px #f9731644; }
+#severity[data-level="4"] { color: #ef4444; text-shadow: 0 0 12px #ef444466; }
+#severity[data-level="5"] { color: #fff; text-shadow: 0 0 16px #ef4444cc;
+  animation: sevPulse 0.8s infinite alternate; }
+
+/* Small level badge for target in expanded */
+.lvl-badge-sm {
+  font-size: 10px;
+  color: var(--gold);
+  background: radial-gradient(circle at 30% 30%, #3a2f12, #0a0805);
+  border: 1px solid var(--gold);
+  border-radius: 50%;
+  width: 22px; height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+/* ── Bars (inherit fill styles from style.css) ── */
+.bar { margin-top: 3px; }
+
+/* ── Player portrait row in expanded ── */
+.w-portrait-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #2a2418;
+}
+.w-portrait-row .portrait-icon {
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 30% 30%, #2a2010, #0a0805);
+  border: 1px solid var(--gold);
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(212,175,55,0.3), inset 0 0 8px rgba(0,0,0,0.6);
+  padding: 6px;
+  flex-shrink: 0;
+}
+.w-portrait-row .portrait-meta { flex: 1; min-width: 0; }
+.w-portrait-row .big-name {
+  font-size: 13px; font-weight: 700; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.w-portrait-row .sub { font-size: 10px; color: var(--dim); letter-spacing: 0.12em; }
+.w-portrait-row .lvl-badge {
+  width: 28px; height: 28px;
+  font-size: 11px;
+}
+
+/* ── Expanded section: collapse/expand ── */
+#expandedSection {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 320ms ease, opacity 280ms ease;
+  opacity: 0;
+}
+body.tx-expanded #expandedSection {
+  max-height: 600px;
   opacity: 1;
 }
 
-#txToggle {
-  position: fixed;
-  right: 14px;
-  bottom: 14px;
-  z-index: 9999;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: 1px solid rgba(120, 200, 255, 0.55);
-  background: linear-gradient(180deg, rgba(20, 28, 40, 0.92), rgba(8, 12, 18, 0.92));
-  color: #cfe7ff;
-  font-family: "Consolas", "Menlo", monospace;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  cursor: pointer;
-  pointer-events: auto;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45),
-              0 0 0 2px rgba(120, 200, 255, 0.08);
-  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease;
+/* Chevron rotates when expanded */
+body.tx-expanded #widgetChevron {
+  transform: rotate(180deg);
+  color: var(--gold);
 }
 
-#txToggle:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55),
-              0 0 0 3px rgba(120, 200, 255, 0.18);
+/* ── Hidden utility (minimap/feed hidden but IDs exist for app.js) ── */
+.w-hidden { display: none !important; }
+
+/* ── Status footer ── */
+#status {
+  text-align: center;
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  color: var(--dim);
+  padding: 4px 0 2px;
+  margin-top: 4px;
+  border-top: 1px solid #1a1408;
+}
+#status.live { color: var(--good); text-shadow: 0 0 5px rgba(74,222,128,0.35); }
+
+/* ── Combat glow on widget ── */
+body[data-combat="1"] #widget {
+  box-shadow: 0 6px 28px rgba(0,0,0,0.75),
+              0 0 18px rgba(220,38,38,0.2) inset,
+              0 0 24px rgba(212,175,55,0.08) inset;
 }
 
-#txToggle:active {
-  transform: translateY(0);
-}
-
-body.tx-expanded #txToggle {
-  background: linear-gradient(180deg, rgba(40, 70, 110, 0.95), rgba(15, 25, 40, 0.95));
-  border-color: rgba(160, 220, 255, 0.85);
-  color: #ffffff;
-}
-
-.tx-toggle-glyph {
-  display: inline-block;
-  line-height: 42px;
-}
+/* ── No-target dim ── */
+body[data-target="0"] #expandedSection .bar-target { opacity: 0.4; }
+body[data-target="0"] #targetName { opacity: 0.5; }

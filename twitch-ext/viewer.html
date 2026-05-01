@@ -9,22 +9,53 @@
   <link rel="stylesheet" href="viewer.css" />
 </head>
 <body data-combat="0" data-target="0" class="tx-collapsed">
-  <div id="frame">
 
-    <header id="header">
-      <div id="zoneBlock">
-        <span id="zoneLabel">ZONE</span>
-        <span id="zone">—</span>
-        <span id="coords"></span>
-      </div>
-      <div id="severityBlock">
-        <span id="severity" data-level="0">SEV 0</span>
-      </div>
-    </header>
+  <div id="widget">
+    <div id="asciiNoise" aria-hidden="true"></div>
 
-    <section id="vitals">
-      <div class="vital player">
-        <div class="portrait" id="playerPortrait">
+    <div id="widgetHeader">
+      <span id="widgetTitle">ASCIIMUD</span>
+      <span id="widgetChevron">▼</span>
+    </div>
+
+    <div id="widgetBody">
+
+      <!-- ── Compact section: always visible ── -->
+      <div id="compactSection">
+        <div class="w-row">
+          <span class="w-label">ZONE</span>
+          <span id="zone" class="w-val">—</span>
+          <span id="coords" class="w-coords"></span>
+        </div>
+
+        <div class="w-row">
+          <span class="w-label">SEV</span>
+          <span id="severity" data-level="0" class="w-sev">0</span>
+        </div>
+
+        <div class="w-row">
+          <span class="w-label">HEALTH</span>
+          <span class="w-pct"><span id="hpVal">—/—</span> <span id="hpPct" class="dim">—%</span></span>
+        </div>
+        <div class="bar bar-hp"><div class="fill" id="hpFill"></div></div>
+
+        <div class="w-row">
+          <span class="w-label" id="powerLabel">MANA</span>
+          <span class="w-pct"><span id="mpVal">—/—</span> <span id="mpPct" class="dim">—%</span></span>
+        </div>
+        <div class="bar bar-mp"><div class="fill" id="mpFill"></div></div>
+
+        <div class="w-row">
+          <span class="w-label">TARGET</span>
+          <span id="targetName" class="w-val">NO TARGET</span>
+        </div>
+      </div>
+
+      <!-- ── Expanded section: hidden in compact mode ── -->
+      <div id="expandedSection">
+
+        <!-- Player portrait row -->
+        <div class="w-portrait-row">
           <div class="portrait-icon" id="portraitIcon"></div>
           <div class="portrait-meta">
             <div class="big-name" id="playerName">PLAYER</div>
@@ -33,29 +64,14 @@
           <div class="lvl-badge" id="playerLevel">1</div>
         </div>
 
-        <div class="vital-row">
-          <span class="vital-label">HEALTH</span>
-          <span class="vital-pct"><span id="hpVal">— / —</span> · <span id="hpPct">— %</span></span>
-        </div>
-        <div class="bar bar-hp"><div class="fill" id="hpFill"></div></div>
-
-        <div class="vital-row">
-          <span class="vital-label dim" id="powerLabel">MANA</span>
-          <span class="vital-pct dim"><span id="mpVal">— / —</span> · <span id="mpPct">— %</span></span>
-        </div>
-        <div class="bar bar-mp"><div class="fill" id="mpFill"></div></div>
-
-        <div class="vital-row tiny">
-          <span class="vital-label dim">XP</span>
-          <span class="vital-pct dim"><span id="xpPct">—</span></span>
+        <!-- XP bar -->
+        <div class="w-row tiny">
+          <span class="w-label dim">XP</span>
+          <span id="xpPct" class="w-pct dim">—</span>
         </div>
         <div class="bar bar-xp"><div class="fill" id="xpFill"></div></div>
 
-        <div id="playerCast" class="cast-bar">
-          <div class="cast-label" id="playerCastSpell">—</div>
-          <div class="bar bar-cast"><div class="fill" id="playerCastFill"></div></div>
-        </div>
-
+        <!-- Combo points + state tags -->
         <div class="player-foot">
           <span class="combo" id="comboPoints">●●●●●</span>
           <span class="meta-tag" id="restingTag" hidden>ZZZ</span>
@@ -64,56 +80,63 @@
           <span class="meta-tag" id="groupTag" hidden>GROUP</span>
         </div>
 
-        <div class="player-stats">
-          <span><span class="dim">GOLD</span> <span id="goldVal">0</span></span>
-          <span><span class="dim">BAG</span> <span id="bagVal">—</span></span>
-          <span><span class="dim">DUR</span> <span id="durVal">—</span></span>
+        <!-- Player cast bar -->
+        <div id="playerCast" class="cast-bar">
+          <div class="cast-label" id="playerCastSpell">—</div>
+          <div class="bar bar-cast"><div class="fill" id="playerCastFill"></div></div>
         </div>
 
+        <!-- Buff aura strip -->
         <div class="aura-strip" id="buffStrip" aria-label="buffs"></div>
-      </div>
 
-      <div class="vital target" id="targetCard">
-        <div class="portrait target-portrait">
-          <div class="portrait-meta">
-            <div class="big-name" id="targetName">NO TARGET</div>
-            <div class="sub" id="targetSub">—</div>
-          </div>
-          <div class="lvl-badge" id="targetLevel" data-cls="normal">—</div>
-        </div>
+        <div class="w-divider"></div>
 
-        <div class="vital-row">
-          <span class="vital-label" id="targetLabel">—</span>
-          <span class="vital-pct"><span id="targetVal">— / —</span> · <span id="targetPct">— %</span></span>
+        <!-- Target details -->
+        <div class="w-row">
+          <span class="w-label" id="targetLabel">—</span>
+          <span class="w-pct">
+            <span id="targetVal">—/—</span>
+            <span id="targetPct" class="dim">—%</span>
+          </span>
+          <span class="w-lvl">
+            <span id="targetLevel" data-cls="normal" class="lvl-badge-sm">—</span>
+          </span>
         </div>
         <div class="bar bar-target"><div class="fill" id="targetFill"></div></div>
+        <div class="w-sub" id="targetSub">—</div>
 
+        <!-- Target cast bar -->
         <div id="targetCast" class="cast-bar">
           <div class="cast-label" id="targetCastSpell">—</div>
           <div class="bar bar-cast"><div class="fill" id="targetCastFill"></div></div>
         </div>
 
+        <!-- Debuff aura strip -->
         <div class="aura-strip" id="debuffStrip" aria-label="debuffs"></div>
-      </div>
-    </section>
 
-    <main>
-      <div id="minimapPanel">
-        <div id="minimapHeader">
-          <span id="minimapZoneName">—</span>
-          <span id="minimapCoords"></span>
+        <!-- Gold / bag / durability stats -->
+        <div class="player-stats">
+          <span><span class="dim">GOLD</span> <span id="goldVal">0</span></span>
+          <span><span class="dim">BAG</span>  <span id="bagVal">—</span></span>
+          <span><span class="dim">DUR</span>  <span id="durVal">—</span></span>
         </div>
-        <pre id="minimap" aria-label="zone minimap"></pre>
-      </div>
-      <section id="feed" aria-label="event feed"></section>
-    </main>
 
-    <footer id="status">disconnected</footer>
-  </div>
+        <!-- Minimap + feed (app.js writes here; hidden visually but IDs exist) -->
+        <div id="minimapPanel" class="w-hidden">
+          <div id="minimapHeader">
+            <span id="minimapZoneName">—</span>
+            <span id="minimapCoords"></span>
+          </div>
+          <pre id="minimap" aria-label="zone minimap"></pre>
+        </div>
+        <section id="feed" class="w-hidden" aria-label="event feed"></section>
 
-  <button id="txToggle" type="button" title="Toggle ASCIIMUD overlay" aria-label="Toggle overlay">
-    <span class="tx-toggle-glyph">A</span>
-  </button>
+      </div><!-- /expandedSection -->
+
+      <footer id="status">disconnected</footer>
+
+    </div><!-- /widgetBody -->
+  </div><!-- /widget -->
 
   <script>window.ASCIIMUD_DEFER_CONNECT = true;</script>
   <script src="icons.js"></script>
