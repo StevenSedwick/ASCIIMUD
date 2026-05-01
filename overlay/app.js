@@ -6,7 +6,7 @@ const $ = (id) => document.getElementById(id);
 const els = {};
 [
   "zone","coords","severity",
-  "playerName","playerSub","playerLevel","portraitArt",
+  "playerName","playerSub","playerLevel","portraitIcon",
   "hpFill","hpVal","hpPct","mpFill","mpVal","mpPct","powerLabel",
   "xpFill","xpPct",
   "playerCast","playerCastSpell","playerCastFill",
@@ -16,12 +16,18 @@ const els = {};
   "targetName","targetSub","targetLevel","targetLabel",
   "targetVal","targetPct","targetFill",
   "targetCast","targetCastSpell","targetCastFill",
+  "actionBar",
   "minimap","minimapZoneName","minimapCoords",
   "feed","status"
 ].forEach(k => els[k] = $(k));
 
 // Optional override: combat log "engaged target name" wins over generic label.
 let engagedName = null;
+
+// Spell metadata DB and action-bar layout, populated by side-channel events.
+const SPELLS = new Map();   // id -> {name, icon, school, rank, castMs}
+let actionBarLayout = [];   // [{slot, type, id, name, icon}, ...]
+let lastCooldowns = [];     // last 10 cooldown seconds from snapshot
 
 // ---------- Lookups ----------
 const ZONE_NAMES = {
@@ -60,81 +66,8 @@ const POWER_COLORS = {
   focus:  "#fb923c",
 };
 
-// Class-specific ASCII portrait. 6 lines × 12 cols. Designed for tabular fonts.
-const PORTRAITS = {
-  Warrior: [
-    "   _==_     ",
-    "  /----\\   ",
-    " | O  O |  ",
-    "  \\_~~_/   ",
-    " <][===]>  ",
-    "   /||\\    ",
-  ],
-  Paladin: [
-    "   .--.     ",
-    "  /:::: \\  ",
-    " | + ++ |  ",
-    "  \\__~_/   ",
-    " <[+|+]>   ",
-    "   /||\\    ",
-  ],
-  Hunter: [
-    "   .--.     ",
-    "  /^^^^\\   ",
-    " | -  - |  ",
-    "  \\__~_/   ",
-    "  )=---->  ",
-    "   /||\\    ",
-  ],
-  Rogue: [
-    "   ,~~,     ",
-    "  /<>/<\\   ",
-    " | --  |   ",
-    "  \\___/    ",
-    "  >|=]<    ",
-    "   /||\\    ",
-  ],
-  Priest: [
-    "   _vv_     ",
-    "  /::::\\   ",
-    " | () () | ",
-    "  \\_<>_/   ",
-    "  ~|+|~    ",
-    "   /||\\    ",
-  ],
-  Shaman: [
-    "   /\\/\\   ",
-    "  /^v^v\\   ",
-    " | -- - |  ",
-    "  \\_~~_/   ",
-    "  *|=|*    ",
-    "   /||\\    ",
-  ],
-  Mage: [
-    "   .**.     ",
-    "  /***\\\\  ",
-    " | * * |   ",
-    "  \\_~_/    ",
-    "  *|+|*    ",
-    "   /||\\    ",
-  ],
-  Warlock: [
-    "   ###      ",
-    "  /vvv\\    ",
-    " | @  @ |  ",
-    "  \\_||_/   ",
-    "  ~|X|~    ",
-    "   /||\\    ",
-  ],
-  Druid: [
-    "   .--.     ",
-    "  /^vv^\\   ",
-    " | OO  |   ",
-    "  \\__~/    ",
-    "  ~|=|~    ",
-    "   /||\\    ",
-  ],
-};
+// Drop the entire ASCII portrait set in favor of class icons (icons.js).
+const PORTRAITS_LEGACY = null;
 
 // ---------- Helpers ----------
 function setBarTier(fillEl, pct) {
@@ -172,9 +105,9 @@ function renderPlayer(p) {
     `${p.faction || "—"} · ${p.gender === "F" ? "Female" : "Male"}`;
   els.playerLevel.textContent = p.level || "?";
 
-  const art = PORTRAITS[p.class] || [];
-  els.portraitArt.textContent = art.join("\n");
-  els.portraitArt.dataset.cls = (p.class || "?").toLowerCase();
+  const art = window.ICONS ? window.ICONS.iconForClass(p.class || "") : "";
+  els.portraitIcon.innerHTML = art;
+  els.portraitIcon.dataset.cls = (p.class || "?").toLowerCase();
 
   // HP
   if (p.hpMax != null) {
@@ -223,11 +156,28 @@ function renderPlayer(p) {
   // Cast bar
   if (p.cast && p.cast.spellId) {
     els.playerCast.classList.add("active");
-    els.playerCastSpell.textContent = `Spell #${p.cast.spellId}`;
-    els.playerCastFill.style.width = (p.cast.progress || 0) + "%";
+    renderCastInto(els.playerCastSpell, els.playerCastFill, p.cast);
   } else {
     els.playerCast.classList.remove("active");
   }
+}
+
+// ---------- Cast bar helper ----------
+function renderCastInto(labelEl, fillEl, cast) {
+  const meta = SPELLS.get(cast.spellId);
+  const name = meta ? meta.name : `Spell #${cast.spellId}`;
+  const rank = meta && meta.rank ? `  ${meta.rank}` : "";
+  let icon = "";
+  if (window.ICONS && meta) {
+    icon = `<span class="cast-icon">${window.ICONS.iconForSpell(meta).svg}</span>`;
+  }
+  labelEl.innerHTML = `${icon}<span class="cast-name">${escapeHtml(name)}${escapeHtml(rank)}</span>`;
+  fillEl.style.width = (cast.progress || 0) + "%";
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c]));
 }
 
 // ---------- Target card ----------
@@ -265,24 +215,75 @@ function renderTarget(t) {
   // Cast bar
   if (t.cast && t.cast.spellId) {
     els.targetCast.classList.add("active");
-    els.targetCastSpell.textContent = `Spell #${t.cast.spellId}`;
-    els.targetCastFill.style.width = (t.cast.progress || 0) + "%";
+    renderCastInto(els.targetCastSpell, els.targetCastFill, t.cast);
   } else {
     els.targetCast.classList.remove("active");
   }
 }
 
 // ---------- Buff/debuff strips ----------
-function renderAuras(parent, ids) {
+function renderAuras(parent, ids, kind) {
   parent.innerHTML = "";
   (ids || []).forEach(id => {
     if (!id) return;
+    const meta = SPELLS.get(id);
     const cell = document.createElement("div");
-    cell.className = "aura";
-    cell.title = `Spell #${id}`;
-    cell.textContent = String(id).slice(-3);  // last 3 digits = quick visual hash
+    cell.className = "aura aura-" + kind;
+    if (window.ICONS && meta) {
+      const icon = window.ICONS.iconForSpell(meta);
+      cell.innerHTML = icon.svg;
+      cell.dataset.school = icon.school;
+      cell.title = `${meta.name}${meta.rank ? " · " + meta.rank : ""}`;
+    } else {
+      cell.textContent = String(id).slice(-3);
+      cell.title = `Spell #${id}`;
+    }
     parent.appendChild(cell);
   });
+}
+
+// ---------- Action bar ----------
+function renderActionBar() {
+  els.actionBar.innerHTML = "";
+  for (let i = 0; i < 10; i++) {
+    const slot = actionBarLayout[i] || actionBarLayout[i + 1] /* 1-indexed addon */;
+    const cd = lastCooldowns[i] || 0;
+    const cell = document.createElement("div");
+    cell.className = "abslot";
+    cell.dataset.key = String(i + 1);
+    if (slot && slot.type && slot.type !== "empty") {
+      const meta = slot.id ? SPELLS.get(slot.id) : null;
+      let inner = "";
+      if (window.ICONS) {
+        if (meta) {
+          inner = window.ICONS.iconForSpell(meta).svg;
+        } else if (slot.type === "spell") {
+          inner = window.ICONS.svgWrap("generic", "#94a3b8");
+        } else {
+          inner = window.ICONS.svgWrap("generic", "#cbd5e1");
+        }
+      }
+      cell.innerHTML = `<div class="ab-icon">${inner}</div>`
+                    + `<div class="ab-key">${i + 1}</div>`
+                    + `<div class="ab-name">${escapeHtml((meta && meta.name) || slot.name || "?")}</div>`;
+      if (cd > 0) {
+        const sweep = document.createElement("div");
+        sweep.className = "ab-sweep";
+        sweep.style.background =
+          `conic-gradient(rgba(0,0,0,0.78) ${cd >= 60 ? 360 : (cd / 60) * 360}deg, transparent 0deg)`;
+        cell.appendChild(sweep);
+        const cdLabel = document.createElement("div");
+        cdLabel.className = "ab-cd";
+        cdLabel.textContent = cd >= 60 ? Math.floor(cd / 60) + "m" : cd + "s";
+        cell.appendChild(cdLabel);
+      }
+    } else {
+      cell.classList.add("abslot-empty");
+      cell.innerHTML = (window.ICONS ? window.ICONS.svgWrap("empty","#3a3a3a") : "")
+                    + `<div class="ab-key">${i + 1}</div>`;
+    }
+    els.actionBar.appendChild(cell);
+  }
 }
 
 // ---------- Minimap (player position) ----------
@@ -371,12 +372,36 @@ function handle(evt) {
   switch (evt.t) {
     case "snapshot": {
       const d = evt.data;
+      lastCooldowns = d.actionCooldowns || [];
       renderHeader(d);
       renderPlayer(d.player);
       renderTarget(d.target);
-      renderAuras(els.buffStrip, d.buffs);
-      renderAuras(els.debuffStrip, d.debuffs);
+      renderAuras(els.buffStrip, d.buffs, "buff");
+      renderAuras(els.debuffStrip, d.debuffs, "debuff");
+      renderActionBar();
       renderMinimap(d);
+      break;
+    }
+    case "spell_meta_bulk": {
+      (evt.spells || []).forEach(s => SPELLS.set(s.id, s));
+      renderActionBar();
+      break;
+    }
+    case "spell_meta": {
+      SPELLS.set(evt.id, {
+        id: evt.id, name: evt.name, icon: evt.icon,
+        school: evt.school, rank: evt.rank, castMs: evt.castMs,
+      });
+      renderActionBar();
+      break;
+    }
+    case "action_bar": {
+      // The addon emits 1-indexed slots in a sparse array; normalize.
+      actionBarLayout = [];
+      (evt.slots || []).forEach(s => {
+        if (s && s.slot) actionBarLayout[s.slot - 1] = s;
+      });
+      renderActionBar();
       break;
     }
     case "engaged_target": {
@@ -419,5 +444,6 @@ function connect() {
 renderHeader({});
 renderPlayer({});
 renderTarget(null);
+renderActionBar();
 renderMinimap({});
 connect();

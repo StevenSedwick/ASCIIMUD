@@ -27,6 +27,7 @@ from typing import Any
 from aiohttp import WSMsgType, web
 
 from combatlog import parse as parse_combat
+from spell_db import SpellDB
 
 try:
     import websockets  # type: ignore
@@ -39,11 +40,12 @@ COALESCE_WINDOW = 1.5  # seconds to bucket melee/spell repeats
 
 
 class StateStore:
-    def __init__(self) -> None:
+    def __init__(self, spell_db: "SpellDB | None" = None) -> None:
         self.snapshot: dict[str, Any] = {}
         self.severity: int = 0
         self.player_name: str | None = None
         self.last_target: str | None = None
+        self.spell_db = spell_db
 
     def apply(self, evt: dict[str, Any]) -> None:
         t = evt.get("t")
@@ -51,6 +53,10 @@ class StateStore:
             self.snapshot = evt.get("data", {})
         elif t == "severity":
             self.severity = int(evt.get("level", 0))
+        elif t == "spell_meta" and self.spell_db is not None:
+            self.spell_db.add_meta(evt)
+        elif t == "action_bar" and self.spell_db is not None:
+            self.spell_db.set_action_bar(evt.get("slots") or [])
         elif t == "combat":
             # Track who you're hitting / who's hitting you.
             if evt.get("src") and evt.get("src") == self.player_name:
@@ -364,6 +370,10 @@ async def ws_handler(request: web.Request) -> web.WebSocketResponse:
     if store.snapshot:
         await ws.send_str(json.dumps({"t": "snapshot", "data": store.snapshot}))
     await ws.send_str(json.dumps({"t": "severity", "level": store.severity}))
+    if store.spell_db is not None:
+        await ws.send_str(json.dumps(store.spell_db.bulk_payload()))
+        if store.spell_db.action_bar:
+            await ws.send_str(json.dumps(store.spell_db.action_bar_payload()))
     try:
         async for msg in ws:
             if msg.type == WSMsgType.ERROR:
@@ -404,6 +414,8 @@ async def main() -> None:
     port = int(cfg["server"].get("port", 8765))
 
     store = StateStore()
+    spell_db = SpellDB(Path(__file__).parent / "data" / "spells.json")
+    store.spell_db = spell_db
     hub = Hub()
     coalescer = Coalescer(hub, lambda: store.player_name)
     coalescer.start()
@@ -432,6 +444,11 @@ async def main() -> None:
     LOG.info("Watching %s for %s and %s", log_dir, chat_log_pattern, combat_log_pattern)
     LOG.info("Watching screenshots in %s", screenshots_dir)
 
+    async def _flush_spell_db() -> None:
+        while True:
+            await asyncio.sleep(15)
+            spell_db.flush()
+
     await asyncio.gather(
         tail_glob(log_dir, chat_log_pattern,
                   lambda l: ingest(l, store, hub, ebs), label="chat"),
@@ -439,6 +456,7 @@ async def main() -> None:
                   lambda l: ingest_combat(l, store, coalescer, ebs), label="combat"),
         watch_screenshots(screenshots_dir, screenshots_pattern,
                           store, hub, ebs),
+        _flush_spell_db(),
     )
 
 

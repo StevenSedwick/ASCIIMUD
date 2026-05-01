@@ -362,6 +362,14 @@ local function encodeSnapshot()
     local buffs   = topAuras("player", true)
     local debuffs = topAuras("player", false)
 
+    -- Notify SpellRegistry so it can side-channel name+icon for any new IDs.
+    if ns.SpellRegistry then
+        if pCastSpell ~= 0 then ns.SpellRegistry:Observe(pCastSpell) end
+        if tCastSpell ~= 0 then ns.SpellRegistry:Observe(tCastSpell) end
+        ns.SpellRegistry:ObserveMany(buffs)
+        ns.SpellRegistry:ObserveMany(debuffs)
+    end
+
     -- Action bar.
     local cds = actionBarCooldowns()
 
