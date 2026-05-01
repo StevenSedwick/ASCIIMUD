@@ -16,7 +16,6 @@ const els = {};
   "targetName","targetSub","targetLevel","targetLabel",
   "targetVal","targetPct","targetFill",
   "targetCast","targetCastSpell","targetCastFill",
-  "actionBar",
   "minimap","minimapZoneName","minimapCoords",
   "feed","status"
 ].forEach(k => els[k] = $(k));
@@ -24,10 +23,8 @@ const els = {};
 // Optional override: combat log "engaged target name" wins over generic label.
 let engagedName = null;
 
-// Spell metadata DB and action-bar layout, populated by side-channel events.
+// Spell metadata DB (keeps cast bars showing real names + icons).
 const SPELLS = new Map();   // id -> {name, icon, school, rank, castMs}
-let actionBarLayout = [];   // [{slot, type, id, name, icon}, ...]
-let lastCooldowns = [];     // last 10 cooldown seconds from snapshot
 
 // ---------- Lookups ----------
 const ZONE_NAMES = {
@@ -242,53 +239,9 @@ function renderAuras(parent, ids, kind) {
   });
 }
 
-// ---------- Action bar ----------
-function renderActionBar() {
-  els.actionBar.innerHTML = "";
-  for (let i = 0; i < 10; i++) {
-    const slot = actionBarLayout[i] || actionBarLayout[i + 1] /* 1-indexed addon */;
-    const cd = lastCooldowns[i] || 0;
-    const cell = document.createElement("div");
-    cell.className = "abslot";
-    cell.dataset.key = String(i + 1);
-    if (slot && slot.type && slot.type !== "empty") {
-      const meta = slot.id ? SPELLS.get(slot.id) : null;
-      let inner = "";
-      if (window.ICONS) {
-        if (meta) {
-          inner = window.ICONS.iconForSpell(meta).svg;
-        } else if (slot.type === "spell") {
-          inner = window.ICONS.svgWrap("generic", "#94a3b8");
-        } else {
-          inner = window.ICONS.svgWrap("generic", "#cbd5e1");
-        }
-      }
-      cell.innerHTML = `<div class="ab-icon">${inner}</div>`
-                    + `<div class="ab-key">${i + 1}</div>`
-                    + `<div class="ab-name">${escapeHtml((meta && meta.name) || slot.name || "?")}</div>`;
-      if (cd > 0) {
-        const sweep = document.createElement("div");
-        sweep.className = "ab-sweep";
-        sweep.style.background =
-          `conic-gradient(rgba(0,0,0,0.78) ${cd >= 60 ? 360 : (cd / 60) * 360}deg, transparent 0deg)`;
-        cell.appendChild(sweep);
-        const cdLabel = document.createElement("div");
-        cdLabel.className = "ab-cd";
-        cdLabel.textContent = cd >= 60 ? Math.floor(cd / 60) + "m" : cd + "s";
-        cell.appendChild(cdLabel);
-      }
-    } else {
-      cell.classList.add("abslot-empty");
-      cell.innerHTML = (window.ICONS ? window.ICONS.svgWrap("empty","#3a3a3a") : "")
-                    + `<div class="ab-key">${i + 1}</div>`;
-    }
-    els.actionBar.appendChild(cell);
-  }
-}
-
 // ---------- Minimap (player position) ----------
-const MAP_W = 40, MAP_H = 14;
-const TRAIL_LEN = 25;
+const MAP_W = 60, MAP_H = 22;
+const TRAIL_LEN = 40;
 let trailHistory = [];
 let currentZoneHash = null;
 
@@ -372,19 +325,16 @@ function handle(evt) {
   switch (evt.t) {
     case "snapshot": {
       const d = evt.data;
-      lastCooldowns = d.actionCooldowns || [];
       renderHeader(d);
       renderPlayer(d.player);
       renderTarget(d.target);
       renderAuras(els.buffStrip, d.buffs, "buff");
       renderAuras(els.debuffStrip, d.debuffs, "debuff");
-      renderActionBar();
       renderMinimap(d);
       break;
     }
     case "spell_meta_bulk": {
       (evt.spells || []).forEach(s => SPELLS.set(s.id, s));
-      renderActionBar();
       break;
     }
     case "spell_meta": {
@@ -392,16 +342,10 @@ function handle(evt) {
         id: evt.id, name: evt.name, icon: evt.icon,
         school: evt.school, rank: evt.rank, castMs: evt.castMs,
       });
-      renderActionBar();
       break;
     }
     case "action_bar": {
-      // The addon emits 1-indexed slots in a sparse array; normalize.
-      actionBarLayout = [];
-      (evt.slots || []).forEach(s => {
-        if (s && s.slot) actionBarLayout[s.slot - 1] = s;
-      });
-      renderActionBar();
+      // Action bar removed from UI; ignore (kept for backward-compat with addon).
       break;
     }
     case "engaged_target": {
@@ -444,6 +388,5 @@ function connect() {
 renderHeader({});
 renderPlayer({});
 renderTarget(null);
-renderActionBar();
 renderMinimap({});
 connect();
