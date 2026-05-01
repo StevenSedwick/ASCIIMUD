@@ -33,3 +33,7 @@ twitch-ext/dist/
 .dev.vars*
 !.dev.vars.example
 !.env.example
+
+# local HTTPS dev cert
+twitch-ext/_devcert.pem
+twitch-ext/_devkey.pem
