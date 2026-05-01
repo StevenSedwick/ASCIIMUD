@@ -16,23 +16,22 @@ Usage:
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
 import json
 import logging
 import sys
 import time
 import tomllib
+from collections import deque
 from pathlib import Path
 from typing import Any
 
+import aiohttp
 from aiohttp import WSMsgType, web
 
 from combatlog import parse as parse_combat
 from spell_db import SpellDB
-
-try:
-    import websockets  # type: ignore
-except ImportError:  # pragma: no cover - optional EBS forwarding
-    websockets = None  # type: ignore
 
 LOG = logging.getLogger("asciimud.companion")
 PREFIX = "ASCIIMUD~"
@@ -156,44 +155,127 @@ class Hub:
 
 
 class EBSForwarder:
-    """Maintains an outbound WSS to the cloud EBS and forwards every event.
+    """HTTP POST + HMAC forwarder to the Cloudflare Workers EBS.
 
-    Reconnects on failure with exponential backoff; drops events while
-    disconnected (the EBS keeps last-known state per channel anyway).
+    - Snapshots are coalesced to ``min_interval`` (default 0.2s = 5 Hz) — only
+      the most recent snapshot in each window is sent. Other event types are
+      forwarded immediately (subject to the same overall rate budget).
+    - HMAC-SHA256 signs the raw request body using the shared secret (hex).
+    - On HTTP error / network failure, the event is dropped after logging:
+      the EBS keeps last-known state per channel anyway, so transient drops
+      self-heal on the next snapshot.
+    - Reconnects implicitly via aiohttp.ClientSession's connection pool.
     """
 
-    def __init__(self, url: str, channel_id: str, shared_secret: str) -> None:
-        self.url = url.rstrip("/") + f"/ingest?channel={channel_id}&token={shared_secret}"
-        self.queue: asyncio.Queue[str] = asyncio.Queue(maxsize=1024)
+    def __init__(self, url: str, channel_id: str, secret_hex: str,
+                 min_interval: float = 0.2) -> None:
+        if not channel_id:
+            raise ValueError("EBS channel_id required")
+        if not secret_hex:
+            raise ValueError("EBS secret_hex required")
+        try:
+            self._key = bytes.fromhex(secret_hex)
+        except ValueError as exc:
+            raise ValueError(f"EBS secret must be hex: {exc}") from exc
+        self._endpoint = f"{url.rstrip('/')}/ingest/{channel_id}"
+        self._min_interval = float(min_interval)
+        self._pending_snapshot: dict[str, Any] | None = None
+        self._pending_events: deque[dict[str, Any]] = deque(maxlen=512)
+        self._session: aiohttp.ClientSession | None = None
         self._task: asyncio.Task[None] | None = None
+        self._wake = asyncio.Event()
+        self._last_send = 0.0
+        self._stopped = False
 
     def start(self) -> None:
-        if websockets is None:
-            LOG.warning("EBS forwarding configured but `websockets` not installed.")
+        if self._task is not None:
             return
+        self._session = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=5.0)
+        )
         self._task = asyncio.create_task(self._run())
+        LOG.info("EBSForwarder started -> %s", self._endpoint)
+
+    async def stop(self) -> None:
+        self._stopped = True
+        self._wake.set()
+        if self._task is not None:
+            self._task.cancel()
+            try:
+                await self._task
+            except (asyncio.CancelledError, Exception):  # noqa: BLE001
+                pass
+        if self._session is not None:
+            await self._session.close()
 
     async def submit(self, evt_json: str) -> None:
+        """Queue an event for forwarding. Accepts the raw JSON line."""
         try:
-            self.queue.put_nowait(evt_json)
-        except asyncio.QueueFull:
-            LOG.debug("EBS queue full, dropping event")
+            evt = json.loads(evt_json)
+        except json.JSONDecodeError:
+            return
+        if not isinstance(evt, dict) or "t" not in evt:
+            return
+        if evt.get("t") == "snapshot":
+            # Coalesce: keep only the most recent snapshot.
+            self._pending_snapshot = evt
+        else:
+            self._pending_events.append(evt)
+        self._wake.set()
 
     async def _run(self) -> None:
-        backoff = 1.0
-        while True:
-            try:
-                LOG.info("Connecting to EBS %s", self.url.split("?")[0])
-                async with websockets.connect(self.url, max_size=2 ** 20) as ws:
-                    backoff = 1.0
-                    LOG.info("EBS connected")
-                    while True:
-                        line = await self.queue.get()
-                        await ws.send(line)
-            except Exception as exc:  # noqa: BLE001 - keep reconnecting
-                LOG.warning("EBS link down (%s); retry in %.1fs", exc, backoff)
-                await asyncio.sleep(backoff)
-                backoff = min(30.0, backoff * 2)
+        while not self._stopped:
+            self._wake.clear()
+            sent_any = False
+
+            now = time.monotonic()
+            wait = self._min_interval - (now - self._last_send)
+            if wait > 0:
+                try:
+                    await asyncio.wait_for(self._wake.wait(), timeout=wait)
+                except asyncio.TimeoutError:
+                    pass
+                continue
+
+            if self._pending_snapshot is not None:
+                snap = self._pending_snapshot
+                self._pending_snapshot = None
+                await self._post(snap)
+                self._last_send = time.monotonic()
+                sent_any = True
+
+            while self._pending_events and not self._stopped:
+                evt = self._pending_events.popleft()
+                await self._post(evt)
+                self._last_send = time.monotonic()
+                sent_any = True
+
+            if not sent_any:
+                try:
+                    await asyncio.wait_for(self._wake.wait(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    pass
+
+    async def _post(self, evt: dict[str, Any]) -> None:
+        if self._session is None:
+            return
+        body = json.dumps(evt, separators=(",", ":")).encode("utf-8")
+        sig = hmac.new(self._key, body, hashlib.sha256).hexdigest()
+        headers = {
+            "content-type": "application/json",
+            "authorization": f"HMAC-SHA256 {sig}",
+        }
+        try:
+            async with self._session.post(self._endpoint, data=body,
+                                          headers=headers) as resp:
+                if resp.status == 429:
+                    LOG.debug("EBS rate-limited, dropping %s", evt.get("t"))
+                elif resp.status >= 400:
+                    text = await resp.text()
+                    LOG.warning("EBS POST %s -> %d: %s", evt.get("t"),
+                                resp.status, text[:120])
+        except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+            LOG.debug("EBS POST failed (%s); dropping %s", exc, evt.get("t"))
 
 
 async def tail(path: Path, on_line) -> None:
@@ -421,14 +503,19 @@ async def main() -> None:
     coalescer.start()
 
     ebs: EBSForwarder | None = None
-    ecfg = cfg.get("ebs", {})
-    if ecfg.get("url"):
-        ebs = EBSForwarder(
-            url=ecfg["url"],
-            channel_id=str(ecfg.get("channel_id", "")),
-            shared_secret=ecfg.get("shared_secret", ""),
-        )
-        ebs.start()
+    ecfg = cfg.get("twitch", cfg.get("ebs", {}))
+    if ecfg.get("ebs_url") or ecfg.get("url"):
+        try:
+            ebs = EBSForwarder(
+                url=ecfg.get("ebs_url") or ecfg.get("url"),
+                channel_id=str(ecfg.get("channel_id", "")),
+                secret_hex=ecfg.get("secret") or ecfg.get("shared_secret", ""),
+                min_interval=float(ecfg.get("min_interval", 0.2)),
+            )
+            ebs.start()
+        except ValueError as exc:
+            LOG.warning("EBS forwarding disabled: %s", exc)
+            ebs = None
 
     app = web.Application()
     app["store"] = store

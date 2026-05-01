@@ -14,10 +14,17 @@ screenshots_pattern = "WoWScrnShot_*.jpg"
 host = "127.0.0.1"
 port = 8765
 
-[ebs]
-# Optional. If set, the companion forwards every event to the cloud EBS too,
-# so the Twitch Extension can fan out to viewers. Leave url = "" to disable.
-url           = ""             # e.g. "wss://asciimud-ebs.fly.dev"
-channel_id    = ""             # your Twitch numeric channel/user id
-shared_secret = ""             # must match ebs/config.toml -> ingest.shared_secret
+[twitch]
+# Optional. If `ebs_url` is set, the companion HMAC-signs and forwards every
+# event to the Cloudflare Workers EBS so the Twitch extension can fan it out
+# to viewers. Snapshots are coalesced to ~5 Hz (min_interval) before sending.
+# Leave ebs_url = "" (or omit the whole section) to disable forwarding —
+# local OBS overlay still works on ws://127.0.0.1:8765.
+ebs_url      = ""           # e.g. "https://asciimud-ebs.<your-subdomain>.workers.dev"
+channel_id   = ""           # an opaque per-broadcaster id; must match the
+                            # KV key set with `wrangler kv:key put SECRETS secret:<channel_id>`
+secret       = ""           # hex-encoded shared HMAC secret
+min_interval = 0.2          # seconds between EBS POSTs (snapshot coalesce)
+
+# Legacy alias supported for back-compat: [ebs] url/shared_secret.
 
