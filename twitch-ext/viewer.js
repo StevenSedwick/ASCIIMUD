@@ -119,28 +119,36 @@
     }
   });
 
-  // ── ASCII noise background ─────────────────────────────────────────────────
-  const noiseEl = document.getElementById("asciiNoise");
-  const NOISE_CHARS = "!@#$%^&*()_+-=[]{}|;:,.<>?/\\~`0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz░▒▓█▄▀■□▪▫";
-
-  function randomChar() {
-    return NOISE_CHARS[Math.floor(Math.random() * NOISE_CHARS.length)];
+  // ── ASCII block bar helper (drives hpBar, mpBar, xpBar, targetBar, playerCastBar) ──
+  // app.js sets fill% on #hpFill etc via style.width — we intercept those writes
+  // and instead update the visible ASCII bar siblings.
+  const BAR_LEN = 10;
+  function makeAsciiBar(pct) {
+    const filled = Math.round((pct / 100) * BAR_LEN);
+    const empty  = BAR_LEN - filled;
+    return "█".repeat(Math.max(0, filled)) + '<span class="e">' + "░".repeat(Math.max(0, empty)) + "</span>";
   }
 
-  function refreshNoise() {
-    if (!noiseEl) return;
-    const cols = Math.floor(280 / 6.5);   // ~43 chars wide at 10px Consolas
-    const rows = Math.floor((widget.offsetHeight || 220) / 12);
-    let text = "";
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) text += randomChar();
-      text += "\n";
-    }
-    noiseEl.textContent = text;
-  }
-
-  refreshNoise();
-  setInterval(refreshNoise, 2000);
+  // Map from fill-div IDs → ascii bar element IDs
+  const BAR_MAP = {
+    hpFill:         "hpBar",
+    mpFill:         "mpBar",
+    xpFill:         "xpBar",
+    targetFill:     "targetBar",
+    playerCastFill: "playerCastBar",
+  };
+  // Intercept app.js writing style.width on fill divs
+  Object.keys(BAR_MAP).forEach(function(fillId) {
+    const fillEl = document.getElementById(fillId);
+    const barEl  = document.getElementById(BAR_MAP[fillId]);
+    if (!fillEl || !barEl) return;
+    // Observe attribute mutations
+    const obs = new MutationObserver(function() {
+      const w = parseFloat(fillEl.style.width) || 0;
+      barEl.innerHTML = makeAsciiBar(w);
+    });
+    obs.observe(fillEl, { attributes: true, attributeFilter: ["style"] });
+  });
 
   // ── Twitch helper ──────────────────────────────────────────────────────────
   if (typeof Twitch === "undefined" || !Twitch.ext) {
