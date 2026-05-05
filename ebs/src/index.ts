@@ -21,7 +21,12 @@ export default {
       return json({ ok: true });
     }
 
-    if (parts.length === 2 && (parts[0] === "ingest" || parts[0] === "ws")) {
+    if (
+      parts.length === 2 &&
+      (parts[0] === "ingest" || parts[0] === "ws" ||
+       parts[0] === "state"  || parts[0] === "map"  ||
+       parts[0] === "interface" || parts[0] === "spells")
+    ) {
       const channelId = parts[1];
       if (!/^[A-Za-z0-9_-]+$/.test(channelId)) {
         return json({ error: "invalid channelId" }, { status: 400 });
@@ -30,7 +35,7 @@ export default {
       const stub = env.CHANNEL_ROOM.get(id);
 
       const inner = new URL(request.url);
-      inner.pathname = parts[0] === "ingest" ? "/ingest" : "/ws";
+      inner.pathname = `/${parts[0]}`;
       inner.searchParams.set("channelId", channelId);
 
       return stub.fetch(new Request(inner.toString(), request));

@@ -1,0 +1,23 @@
+# Optional non-secret tunables. Copy to bot.toml.
+# All values shown are defaults; entries can be omitted.
+
+[cooldowns]
+generic_update     = 300
+recap              = 420
+danger_high        = 60
+danger_critical    = 25
+close_call         = 60
+addon_disconnect   = 30
+command_reply      = 15
+global_between     = 4
+dedupe_window      = 90
+
+[recap]
+ring_size = 12        # last N important events kept for !recap
+post_max  = 5         # max events included in an auto recap
+
+[counters]
+file = "data/run_counters.json"
+
+[narration]
+prefix = "[ASCIIMUD] "
