@@ -359,9 +359,20 @@ local function scanTalents()
     local out = {0, 0, 0}
     if not GetTalentTabInfo then return out end
     for tab = 1, 3 do
-        local ok, _, _, ps = pcall(GetTalentTabInfo, tab)
-        if ok and ps then
-            out[tab] = math.min(99, math.max(0, ps))
+        -- Classic Era signature: id, name, description, iconTexture,
+        -- pointsSpent, fileName, ... — pcall the call and pull out the
+        -- first numeric return that looks like points spent.
+        local ok, r1, r2, r3, r4, r5 = pcall(GetTalentTabInfo, tab)
+        if ok then
+            local ps
+            for _, v in ipairs({r5, r4, r3, r2, r1}) do
+                if type(v) == "number" then ps = v; break end
+            end
+            if ps then
+                if ps < 0 then ps = 0 end
+                if ps > 99 then ps = 99 end
+                out[tab] = ps
+            end
         end
     end
     return out
