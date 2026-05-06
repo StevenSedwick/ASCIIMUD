@@ -58,7 +58,7 @@ def template(kind: str, facts: dict, prefix: str = PREFIX) -> str:
     if kind == "stream_start":
         return _t(prefix,
             "The world is hidden. The text is all we have. "
-            "Welcome to a WoW Classic Hardcore run played through ASCIIMUD.")
+            "Welcome to a WoW Classic Hardcore run played through the Text Adventure addon!")
     if kind == "rules":
         return _t(prefix, CHALLENGE_LINE)
     if kind == "addon":
@@ -88,7 +88,7 @@ def template(kind: str, facts: dict, prefix: str = PREFIX) -> str:
             f"Drag-and-drop live interface (vitals, target, buffs, action bar, "
             f"map): {url}")
     if kind == "help":
-        cmds = ("!status !rules !danger !objective !recap !stats "
+        cmds = ("!status !rules !danger !objective !stats "
                 "!closecalls !deathlog !addon !map !interface !help")
         return _t(prefix, "Commands: " + cmds)
     if kind == "status":
@@ -104,12 +104,6 @@ def template(kind: str, facts: dict, prefix: str = PREFIX) -> str:
         changed = _facts_get(f, "objectiveChangedAgo")
         suffix = f" (set {fmt_secs(changed)} ago)" if changed is not None else ""
         return _t(prefix, f"Objective: {objective}{suffix}.")
-    if kind == "recap":
-        events = _facts_get(f, "events") or []
-        if not events:
-            return _t(prefix, "Recap: nothing notable yet this run.")
-        joined = " | ".join(events[: int(_facts_get(f, "max", default=5))])
-        return _t(prefix, f"Recap: {joined}.")
     if kind == "stats":
         return _t(prefix,
             f"{name}: alive {fmt_secs(_facts_get(f, 'timeAlive', default=0))}, "
