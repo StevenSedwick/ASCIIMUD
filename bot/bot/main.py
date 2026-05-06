@@ -1,7 +1,7 @@
 """Asyncio orchestrator.
 
-Wires StateReader → Derived → AsciiMudBot, plus a periodic recap ticker and
-counter persistence on shutdown.
+Wires StateReader → Derived → AsciiMudBot, plus counter persistence on
+shutdown.
 """
 from __future__ import annotations
 
@@ -71,16 +71,6 @@ async def _amain(cfg: Config) -> int:
                 pass
             await dispatch_events(derived.tick())
 
-    async def recap_ticker() -> None:
-        while not stop.is_set():
-            try:
-                await asyncio.wait_for(stop.wait(), timeout=cfg.cooldowns.recap)
-                return
-            except asyncio.TimeoutError:
-                pass
-            await dispatch_events([("recap_tick", derived.recap_facts(
-                max_items=cfg.recap_post_max))])
-
     async def addon_promo_ticker() -> None:
         if not cfg.addon_url or cfg.addon_promo_interval <= 0:
             return
@@ -115,7 +105,6 @@ async def _amain(cfg: Config) -> int:
             bot.start(),
             reader.run(),
             ticker(),
-            recap_ticker(),
             addon_promo_ticker(),
             stop_bot_when_done(),
             stream_start(),

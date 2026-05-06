@@ -19,7 +19,7 @@ def test_rules_template_is_canonical():
 
 def test_help_lists_commands():
     msg = template("help", {})
-    for c in ("!status", "!danger", "!objective", "!recap", "!help"):
+    for c in ("!status", "!danger", "!objective", "!help"):
         assert c in msg
 
 

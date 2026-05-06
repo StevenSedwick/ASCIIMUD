@@ -94,8 +94,6 @@ With WoW + ASCIIMUD addon + companion + bot all running in your test channel:
       `addon_disconnected`. Restart the companion → `addon_reconnected`.
 - [ ] As broadcaster: `!setobjective Reach Goldshire` → bot auto-posts the
       objective-update line and `!objective` reflects it.
-- [ ] Idle for 7 minutes during play → bot posts a recap with the most
-      recent important events, then resets the cooldown.
 - [ ] Disable AI (`AI_ENABLED=false`) → bot still posts deterministic
       template messages.
 

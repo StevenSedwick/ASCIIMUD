@@ -102,9 +102,6 @@ class AsciiMudBot(tio_commands.Bot):
     @tio_commands.command(name="objective")
     async def _objective(self, ctx): await self._dispatch(ctx, "objective")
 
-    @tio_commands.command(name="recap")
-    async def _recap(self, ctx): await self._dispatch(ctx, "recap")
-
     @tio_commands.command(name="stats")
     async def _stats(self, ctx): await self._dispatch(ctx, "stats")
 

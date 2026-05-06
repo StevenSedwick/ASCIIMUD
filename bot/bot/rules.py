@@ -50,8 +50,5 @@ def decide(kind: str, facts: dict[str, Any], cd: Cooldowns) -> Decision:
     if kind == "stream_start":
         return Decision(True, kind, f, "stream_start", 1e12)  # once per process
 
-    if kind == "recap_tick":
-        return Decision(True, "recap", f, "recap", cd.recap)
-
     # Everything else is informational only.
     return Decision(False)

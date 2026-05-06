@@ -26,10 +26,6 @@ def cmd_objective(d: Derived) -> tuple[str, dict[str, Any]]:
     return ("objective", d.snapshot_facts())
 
 
-def cmd_recap(d: Derived, max_items: int = 5) -> tuple[str, dict[str, Any]]:
-    return ("recap", d.recap_facts(max_items=max_items))
-
-
 def cmd_stats(d: Derived) -> tuple[str, dict[str, Any]]:
     return ("stats", d.snapshot_facts())
 
@@ -72,7 +68,6 @@ COMMANDS = {
     "rules": cmd_rules,
     "danger": cmd_danger,
     "objective": cmd_objective,
-    "recap": cmd_recap,
     "stats": cmd_stats,
     "closecalls": cmd_closecalls,
     "deathlog": cmd_deathlog,
